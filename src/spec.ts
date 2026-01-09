@@ -1,76 +1,81 @@
 import { z } from "zod";
 
-export const PopupTypeEnum = z.enum(["modal", "banner", "slideup"]);
-export type PopupType = z.infer<typeof PopupTypeEnum>;
+export type Mode = "light" | "dark";
 
-export const LayoutStructureEnum = z.enum(["image_top", "no_image"]);
+export const ElementKindEnum = z.enum(["text", "image", "button"]);
+export type ElementKind = z.infer<typeof ElementKindEnum>;
 
-export const PopupSpecSchema = z.object({
-  type: PopupTypeEnum,
-  version: z.literal("1.0"),
-  layout: z.object({
-    structure: LayoutStructureEnum,
-    padding: z.number().int().min(0).max(48),
-    cornerRadius: z.number().int().min(0).max(40),
-    maxWidth: z.number().int().min(280).max(860),
-  }),
-  theme: z.object({
-    mode: z.enum(["light", "dark"]),
-    brandColor: z.string().min(4),
-    backgroundColor: z.string().min(4),
-    textColor: z.string().min(4),
-    mutedTextColor: z.string().min(4),
-  }),
-  content: z.object({
-    headline: z.string().min(1).max(80),
-    body: z.string().min(1).max(240),
-
-    // Always present keys: enabled/url/alt
-    image: z
-      .object({
-        enabled: z.boolean(),
-        url: z.string(),
-        alt: z.string(),
-      })
-      .superRefine((val, ctx) => {
-        if (val.enabled) {
-          if (!val.url || !/^https?:\/\//.test(val.url)) {
-            ctx.addIssue({ code: "custom", message: "image.url must be a valid URL when image.enabled is true." });
-          }
-          if (!val.alt || val.alt.trim().length < 1) {
-            ctx.addIssue({ code: "custom", message: "image.alt is required when image.enabled is true." });
-          }
-        }
-      }),
-  }),
-  ctas: z
-    .array(
-      z.object({
-        id: z.enum(["primary", "secondary"]),
-        label: z.string().min(1).max(30),
-        // Always present keys: type/value
-        action: z
-          .object({
-            type: z.enum(["dismiss", "url"]),
-            value: z.string(),
-          })
-          .superRefine((val, ctx) => {
-            if (val.type === "url") {
-              if (!val.value || !/^https?:\/\//.test(val.value)) {
-                ctx.addIssue({ code: "custom", message: "action.value must be a valid URL when action.type is 'url'." });
-              }
-            }
-          }),
-        style: z.enum(["primary", "secondary"]),
-      })
-    )
-    .min(1)
-    .max(2),
-  behavior: z.object({
-    dismissible: z.boolean(),
-    backdrop: z.boolean(),
-  }),
-  warnings: z.array(z.string()),
+export const ContainerSchema = z.object({
+  // Required keys (strict-friendly)
+  id: z.literal("container"),
+  name: z.string(),
+  mode: z.enum(["light", "dark"]),
+  aspectRatio: z.number().min(0.2).max(4), // width / height
+  maxWidth: z.number().int().min(280).max(860),
+  cornerRadius: z.number().int().min(0).max(40),
+  backgroundColor: z.string(),
+  showCloseIcon: z.boolean(),
+  backdrop: z.boolean(),
+  dismissible: z.boolean(),
+  brandColor: z.string(),
+  textColor: z.string(),
+  mutedTextColor: z.string(),
 });
 
-export type PopupSpec = z.infer<typeof PopupSpecSchema>;
+export type ContainerSpec = z.infer<typeof ContainerSchema>;
+
+export const BaseElementSchema = z.object({
+  id: z.string().min(1),
+  kind: ElementKindEnum,
+  name: z.string(),
+  hidden: z.boolean(),
+});
+
+export const TextElementSchema = BaseElementSchema.extend({
+  kind: z.literal("text"),
+  text: z.string(),
+  fontFamily: z.string(),
+  fontSize: z.number().int().min(10).max(72),
+  fontWeight: z.number().int().min(300).max(900),
+  align: z.enum(["left", "center", "right"]),
+  color: z.string(),
+});
+
+export type TextElement = z.infer<typeof TextElementSchema>;
+
+export const ImageElementSchema = BaseElementSchema.extend({
+  kind: z.literal("image"),
+  url: z.string(),
+  alt: z.string(),
+  height: z.number().int().min(80).max(420),
+  fit: z.enum(["cover", "contain"]),
+  cornerRadius: z.number().int().min(0).max(24),
+});
+
+export type ImageElement = z.infer<typeof ImageElementSchema>;
+
+export const ButtonElementSchema = BaseElementSchema.extend({
+  kind: z.literal("button"),
+  label: z.string(),
+  fontSize: z.number().int().min(10).max(28),
+  fontWeight: z.number().int().min(400).max(900),
+  cornerRadius: z.number().int().min(0).max(24),
+  fillColor: z.string(),
+  textColor: z.string(),
+  actionType: z.enum(["url", "dismiss"]),
+  actionValue: z.string(),
+  fullWidth: z.boolean(),
+});
+
+export type ButtonElement = z.infer<typeof ButtonElementSchema>;
+
+export const ElementSchema = z.union([TextElementSchema, ImageElementSchema, ButtonElementSchema]);
+export type PopupElement = z.infer<typeof ElementSchema>;
+
+export const PopupDocSchema = z.object({
+  version: z.literal("2.0"),
+  container: ContainerSchema,
+  elements: z.array(ElementSchema).min(1),
+});
+
+export type PopupDoc = z.infer<typeof PopupDocSchema>;
