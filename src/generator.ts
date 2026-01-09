@@ -1,245 +1,202 @@
-import type { PopupSpec, PopupType } from "./spec";
+import type { PopupDoc, PopupElement, ElementKind, Mode } from "./spec";
+import { PopupDocSchema } from "./spec";
+import { DEMO_PRESETS } from "./demoPresets";
 
-export function defaultsForType(type: PopupType) {
-  if (type === "banner") return { maxWidth: 860, cornerRadius: 14, padding: 14 };
-  if (type === "slideup") return { maxWidth: 520, cornerRadius: 16, padding: 16 };
-  return { maxWidth: 420, cornerRadius: 16, padding: 16 }; // modal
+export function getDemoPresets() {
+  return DEMO_PRESETS;
 }
 
-export function generateSpecDeterministic(
-  prompt: string,
-  brandColor: string,
-  mode: "light" | "dark",
-  type: PopupType
-): PopupSpec {
+export function defaultsContainer(mode: Mode, brandColor: string) {
+  return {
+    id: "container" as const,
+    name: "Container",
+    mode,
+    aspectRatio: 0.72,
+    maxWidth: 420,
+    cornerRadius: 18,
+    backgroundColor: mode === "dark" ? "#0B1220" : "#FFFFFF",
+    showCloseIcon: true,
+    backdrop: true,
+    dismissible: true,
+    brandColor,
+    textColor: mode === "dark" ? "#E5E7EB" : "#0F172A",
+    mutedTextColor: mode === "dark" ? "#9CA3AF" : "#475569",
+  };
+}
+
+export function newTextElement(id: string): PopupElement {
+  return {
+    id,
+    kind: "text",
+    name: "Text",
+    hidden: false,
+    text: "New text",
+    fontFamily: "Inter, system-ui, Arial",
+    fontSize: 16,
+    fontWeight: 700,
+    align: "left",
+    color: "#0F172A",
+  };
+}
+
+export function newImageElement(id: string): PopupElement {
+  return {
+    id,
+    kind: "image",
+    name: "Image",
+    hidden: false,
+    url: "https://placehold.co/1200x600/png",
+    alt: "Placeholder image",
+    height: 200,
+    fit: "cover",
+    cornerRadius: 16,
+  };
+}
+
+export function newButtonElement(id: string, brandColor = "#2563EB"): PopupElement {
+  return {
+    id,
+    kind: "button",
+    name: "Button",
+    hidden: false,
+    label: "Click Here",
+    fontSize: 14,
+    fontWeight: 800,
+    cornerRadius: 12,
+    fillColor: brandColor,
+    textColor: "#FFFFFF",
+    actionType: "url",
+    actionValue: "https://example.com",
+    fullWidth: true,
+  };
+}
+
+export function addElement(doc: PopupDoc, kind: ElementKind): PopupDoc {
+  const next: PopupDoc = JSON.parse(JSON.stringify(doc));
+  const id = `${kind}_${Math.random().toString(16).slice(2, 8)}`;
+
+  let el: PopupElement;
+  if (kind === "text") el = newTextElement(id);
+  else if (kind === "image") el = newImageElement(id);
+  else el = newButtonElement(id, next.container.brandColor);
+
+  el.name = kind === "text" ? `Text ${countKind(next, "text") + 1}` : kind === "image" ? `Image ${countKind(next, "image") + 1}` : `Button ${countKind(next, "button") + 1}`;
+
+  next.elements.push(el);
+  return next;
+}
+
+function countKind(doc: PopupDoc, kind: ElementKind) {
+  return doc.elements.filter((e) => e.kind === kind).length;
+}
+
+export function generateDocDeterministic(prompt: string, brandColor: string, mode: Mode): PopupDoc {
   const lower = prompt.toLowerCase();
 
-  const wantsImage = /image|banner|visual|product|logo/.test(lower);
-  const hasSecondary = /secondary|later|not now|dismiss/.test(lower);
+  const wantsImage = /image|banner|visual|product|logo|photo/.test(lower);
+  const wantsTwoButtons = /two cta|2 cta|secondary|later|not now|dismiss/.test(lower);
+  const isBanner = /banner/.test(lower);
 
   const headline =
-    /welcome|onboard|new user/.test(lower)
-      ? "Welcome!"
-      : /discount|offer|sale|%|coupon/.test(lower)
-        ? "Limited-time offer"
-        : /update|announce|new feature/.test(lower)
-          ? "What’s new"
-          : "Quick update";
+    /welcome|onboard|new user/.test(lower) ? "Welcome!" :
+    /discount|offer|sale|%|coupon|black friday/.test(lower) ? "Limited-time offer" :
+    /update|announce|new feature/.test(lower) ? "What’s new" :
+    "Quick update";
 
-  let body =
-    /discount|offer|sale|%|coupon/.test(lower)
+  const body =
+    /discount|offer|sale|%|coupon|black friday/.test(lower)
       ? "Unlock your deal now. Limited time only."
       : /welcome|onboard|new user/.test(lower)
         ? "Here’s a quick tour to help you get started."
         : "Take a moment to review this message.";
 
-  if (/more urgent|urgent|hurry/.test(lower)) body = body.replace(/Limited time only\.?/i, "Ends soon.");
-  if (/minimal|minimalist|shorter|shorten/.test(lower)) body = body.slice(0, 70).replace(/\s+\S*$/, "") + ".";
-
-  const primaryLabel =
-    /shop/.test(lower) ? "Shop Now" : /learn/.test(lower) ? "Learn More" : /start/.test(lower) ? "Get Started" : "Continue";
-
-  const dflt = defaultsForType(type);
-
-  return {
-    type,
-    version: "1.0",
-    layout: {
-      structure: wantsImage ? "image_top" : "no_image",
-      padding: dflt.padding,
-      cornerRadius: dflt.cornerRadius,
-      maxWidth: dflt.maxWidth,
-    },
-    theme: {
-      mode,
-      brandColor,
-      backgroundColor: mode === "dark" ? "#0B1220" : "#FFFFFF",
-      textColor: mode === "dark" ? "#E5E7EB" : "#0F172A",
-      mutedTextColor: mode === "dark" ? "#9CA3AF" : "#475569",
-    },
-    content: {
-      headline,
-      body,
-      // IMPORTANT: url/alt ALWAYS present for schema compatibility.
-      image: wantsImage
-        ? { enabled: true, url: "https://placehold.co/800x400/png", alt: "Placeholder image" }
-        : { enabled: false, url: "", alt: "" },
-    },
-    ctas: [
-      // IMPORTANT: action.value ALWAYS present for schema compatibility.
-      { id: "primary", label: primaryLabel, action: { type: "url", value: "https://example.com" }, style: "primary" },
-      ...(hasSecondary
-        ? [{ id: "secondary", label: "Later", action: { type: "dismiss", value: "" }, style: "secondary" }]
-        : []),
-    ],
-    behavior: {
-      dismissible: true,
-      backdrop: true,
-    },
-    warnings: [],
-  };
-}
-
-export async function generateSpecWithOpenAI(args: {
-  apiKey: string;
-  prompt: string;
-  brandColor: string;
-  mode: "light" | "dark";
-  type: PopupType;
-  model?: string;
-  currentSpec?: PopupSpec | null;
-}): Promise<unknown> {
-  const { apiKey, prompt, brandColor, mode, type, model, currentSpec } = args;
-
-  // No oneOf/anyOf. Also: validator requires `required` includes ALL keys in properties.
-  const schema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      type: { type: "string", enum: ["modal", "banner", "slideup"] },
-      version: { type: "string", const: "1.0" },
-
-      layout: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          structure: { type: "string", enum: ["image_top", "no_image"] },
-          padding: { type: "integer", minimum: 0, maximum: 48 },
-          cornerRadius: { type: "integer", minimum: 0, maximum: 40 },
-          maxWidth: { type: "integer", minimum: 280, maximum: 860 },
-        },
-        required: ["structure", "padding", "cornerRadius", "maxWidth"],
-      },
-
-      theme: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          mode: { type: "string", enum: ["light", "dark"] },
-          brandColor: { type: "string" },
-          backgroundColor: { type: "string" },
-          textColor: { type: "string" },
-          mutedTextColor: { type: "string" },
-        },
-        required: ["mode", "brandColor", "backgroundColor", "textColor", "mutedTextColor"],
-      },
-
-      content: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          headline: { type: "string", minLength: 1, maxLength: 80 },
-          body: { type: "string", minLength: 1, maxLength: 240 },
-          image: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              enabled: { type: "boolean" },
-              url: { type: "string" },
-              alt: { type: "string" },
-            },
-            // REQUIRED must include ALL properties keys per validator
-            required: ["enabled", "url", "alt"],
-          },
-        },
-        required: ["headline", "body", "image"],
-      },
-
-      ctas: {
-        type: "array",
-        minItems: 1,
-        maxItems: 2,
-        items: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            id: { type: "string", enum: ["primary", "secondary"] },
-            label: { type: "string", minLength: 1, maxLength: 30 },
-            action: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                type: { type: "string", enum: ["dismiss", "url"] },
-                value: { type: "string" },
-              },
-              // REQUIRED must include ALL properties keys per validator
-              required: ["type", "value"],
-            },
-            style: { type: "string", enum: ["primary", "secondary"] },
-          },
-          required: ["id", "label", "action", "style"],
-        },
-      },
-
-      behavior: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          dismissible: { type: "boolean" },
-          backdrop: { type: "boolean" },
-        },
-        required: ["dismissible", "backdrop"],
-      },
-
-      warnings: { type: "array", items: { type: "string" } },
-    },
-    required: ["type", "version", "layout", "theme", "content", "ctas", "behavior", "warnings"],
-  };
-
-  const instructions =
-    "Return ONLY a JSON object that matches the JSON schema strictly. Do not include any additional keys. " +
-    "Keep copy concise. Always set theme.mode, theme.brandColor, and type based on the provided constraints. " +
-    "IMPORTANT: content.image must ALWAYS include keys enabled, url, alt. " +
-    "If no image is needed: set enabled=false and set url='' and alt=''. " +
-    "If image is needed: set enabled=true, url='https://placehold.co/800x400/png', and alt to a short description. " +
-    "IMPORTANT: each CTA action must ALWAYS include keys type and value. " +
-    "If action.type='dismiss': set value='' (empty string). If action.type='url': set value to a valid URL string.";
-
-  const userContent =
-    `Constraints:\n` +
-    `- type: ${type}\n` +
-    `- mode: ${mode}\n` +
-    `- brandColor: ${brandColor}\n\n` +
-    (currentSpec ? `Current PopupSpec (modify this according to the instruction):\n${JSON.stringify(currentSpec)}\n\n` : "") +
-    `Instruction:\n${prompt}\n`;
-
-  const body = {
-    model: model || "gpt-4o-mini-2024-07-18",
-    instructions,
-    input: [{ role: "user", content: userContent }],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "popup_spec",
-        strict: true,
-        schema,
-      },
-    },
-  };
-
-  const res = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify(body),
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    const msg = (data && (data.error?.message || data.error || data.message)) || "OpenAI request failed";
-    throw new Error(msg);
+  const container = defaultsContainer(mode, brandColor);
+  if (isBanner) {
+    container.aspectRatio = 2.6;
+    container.maxWidth = 860;
+    container.backdrop = false;
+    container.cornerRadius = 14;
   }
 
-  const textOut =
-    data.output_text ||
-    (Array.isArray(data.output)
-      ? data.output
-          .flatMap((o: any) => (Array.isArray(o.content) ? o.content : []))
-          .map((c: any) => c.text)
-          .filter(Boolean)
-          .join("\n")
-      : "");
+  const elements: PopupElement[] = [];
 
-  if (!textOut) throw new Error("No text output found in response.");
+  if (wantsImage) {
+    elements.push({
+      id: "img1",
+      kind: "image",
+      name: "Image 1",
+      hidden: false,
+      url: "https://placehold.co/1200x600/png",
+      alt: "Placeholder image",
+      height: isBanner ? 140 : 220,
+      fit: "cover",
+      cornerRadius: 16,
+    });
+  }
 
-  return JSON.parse(textOut.trim());
+  elements.push({
+    id: "t1",
+    kind: "text",
+    name: "Text 1",
+    hidden: false,
+    text: headline,
+    fontFamily: "Inter, system-ui, Arial",
+    fontSize: isBanner ? 18 : 22,
+    fontWeight: 850,
+    align: "left",
+    color: container.textColor,
+  });
+
+  elements.push({
+    id: "t2",
+    kind: "text",
+    name: "Text 2",
+    hidden: false,
+    text: body,
+    fontFamily: "Inter, system-ui, Arial",
+    fontSize: 14,
+    fontWeight: 550,
+    align: "left",
+    color: container.mutedTextColor,
+  });
+
+  elements.push({
+    id: "b1",
+    kind: "button",
+    name: "Button 1",
+    hidden: false,
+    label: /shop/.test(lower) ? "Shop Now" : /start/.test(lower) ? "Get Started" : "Continue",
+    fontSize: 14,
+    fontWeight: 800,
+    cornerRadius: 12,
+    fillColor: brandColor,
+    textColor: "#FFFFFF",
+    actionType: "url",
+    actionValue: "https://example.com",
+    fullWidth: !isBanner,
+  });
+
+  if (wantsTwoButtons) {
+    elements.push({
+      id: "b2",
+      kind: "button",
+      name: "Button 2",
+      hidden: false,
+      label: "Later",
+      fontSize: 14,
+      fontWeight: 750,
+      cornerRadius: 12,
+      fillColor: mode === "dark" ? "rgba(255,255,255,0.10)" : "#EEF2FF",
+      textColor: mode === "dark" ? "#E5E7EB" : "#1E3A8A",
+      actionType: "dismiss",
+      actionValue: "",
+      fullWidth: !isBanner,
+    });
+  }
+
+  const doc: PopupDoc = { version: "2.0", container, elements };
+
+  const parsed = PopupDocSchema.safeParse(doc);
+  if (!parsed.success) throw new Error("Deterministic generator produced invalid PopupDoc.");
+  return parsed.data;
 }
