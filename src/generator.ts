@@ -88,17 +88,19 @@ export async function generateSpecWithOpenAI(args: {
 }): Promise<unknown> {
   const { apiKey, prompt, brandColor, mode, type, model, currentSpec } = args;
 
+  // NOTE: OpenAI's structured output validator requires `type` at many nodes
+  // (even when using `const` / `enum`).
   const schema = {
     type: "object",
     additionalProperties: false,
     properties: {
-      type: { enum: ["modal", "banner", "slideup"] },
-      version: { const: "1.0" },
+      type: { type: "string", enum: ["modal", "banner", "slideup"] },
+      version: { type: "string", const: "1.0" },
       layout: {
         type: "object",
         additionalProperties: false,
         properties: {
-          structure: { enum: ["image_top", "no_image"] },
+          structure: { type: "string", enum: ["image_top", "no_image"] },
           padding: { type: "integer", minimum: 0, maximum: 48 },
           cornerRadius: { type: "integer", minimum: 0, maximum: 40 },
           maxWidth: { type: "integer", minimum: 280, maximum: 860 },
@@ -109,7 +111,7 @@ export async function generateSpecWithOpenAI(args: {
         type: "object",
         additionalProperties: false,
         properties: {
-          mode: { enum: ["light", "dark"] },
+          mode: { type: "string", enum: ["light", "dark"] },
           brandColor: { type: "string" },
           backgroundColor: { type: "string" },
           textColor: { type: "string" },
@@ -125,11 +127,22 @@ export async function generateSpecWithOpenAI(args: {
           body: { type: "string", minLength: 1, maxLength: 240 },
           image: {
             oneOf: [
-              { type: "object", additionalProperties: false, properties: { kind: { const: "none" } }, required: ["kind"] },
               {
                 type: "object",
                 additionalProperties: false,
-                properties: { kind: { const: "url" }, url: { type: "string" }, alt: { type: "string", minLength: 1, maxLength: 120 } },
+                properties: {
+                  kind: { type: "string", const: "none" },
+                },
+                required: ["kind"],
+              },
+              {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  kind: { type: "string", const: "url" },
+                  url: { type: "string" },
+                  alt: { type: "string", minLength: 1, maxLength: 120 },
+                },
                 required: ["kind", "url", "alt"],
               },
             ],
@@ -145,15 +158,30 @@ export async function generateSpecWithOpenAI(args: {
           type: "object",
           additionalProperties: false,
           properties: {
-            id: { enum: ["primary", "secondary"] },
+            id: { type: "string", enum: ["primary", "secondary"] },
             label: { type: "string", minLength: 1, maxLength: 30 },
             action: {
               oneOf: [
-                { type: "object", additionalProperties: false, properties: { type: { const: "dismiss" } }, required: ["type"] },
-                { type: "object", additionalProperties: false, properties: { type: { const: "url" }, value: { type: "string" } }, required: ["type", "value"] },
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    type: { type: "string", const: "dismiss" },
+                  },
+                  required: ["type"],
+                },
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    type: { type: "string", const: "url" },
+                    value: { type: "string" },
+                  },
+                  required: ["type", "value"],
+                },
               ],
             },
-            style: { enum: ["primary", "secondary"] },
+            style: { type: "string", enum: ["primary", "secondary"] },
           },
           required: ["id", "label", "action", "style"],
         },
@@ -161,7 +189,10 @@ export async function generateSpecWithOpenAI(args: {
       behavior: {
         type: "object",
         additionalProperties: false,
-        properties: { dismissible: { type: "boolean" }, backdrop: { type: "boolean" } },
+        properties: {
+          dismissible: { type: "boolean" },
+          backdrop: { type: "boolean" },
+        },
         required: ["dismissible", "backdrop"],
       },
       warnings: { type: "array", items: { type: "string" } },
@@ -193,8 +224,8 @@ export async function generateSpecWithOpenAI(args: {
         name: "popup_spec",
         strict: true,
         schema,
-  },
-},
+      },
+    },
   };
 
   const res = await fetch("https://api.openai.com/v1/responses", {
