@@ -149,6 +149,15 @@ export const OFFLINE_DEMOS: Array<{
   },
 ];
 
+/**
+ * Helper expected by App.tsx: return a spec for a given offline demo id,
+ * or fall back to the first demo.
+ */
+export function generateSpecOfflineDemo(demoId?: string): PopupSpec {
+  const found = demoId ? OFFLINE_DEMOS.find((d) => d.id === demoId) : undefined;
+  return (found || OFFLINE_DEMOS[0]).spec;
+}
+
 export function defaultsForType(type: PopupType) {
   if (type === "banner") return { maxWidth: 860, cornerRadius: 14, padding: 14 };
   if (type === "slideup") return { maxWidth: 520, cornerRadius: 16, padding: 16 };
