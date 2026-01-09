@@ -169,3 +169,244 @@ export default function App() {
       }
 
       const parsed = PopupSpecSchema.safeParse(data);
+      if (!parsed.success) {
+        setError("Refined spec failed validation. Try a more specific refinement prompt.");
+        return;
+      }
+
+      const warnings = computeWarnings(parsed.data);
+      setSpec({ ...parsed.data, warnings: [...parsed.data.warnings, ...warnings] });
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to refine");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="ndm-root">
+      {/* Top header (matches screenshot style) */}
+      <div className="ndm-topbar">
+        <button className="ndm-iconBtn" title="Back" aria-label="Back">
+          ←
+        </button>
+
+        <div className="ndm-title">Create Native Display Message</div>
+
+        <div className="ndm-topbarRight">
+          <button className="ndm-iconBtn" title="Undo" aria-label="Undo">
+            ↶
+          </button>
+          <button className="ndm-iconBtn" title="Redo" aria-label="Redo">
+            ↷
+          </button>
+
+          <button className="ndm-pillBtn">Template</button>
+          <button className="ndm-pillBtn">Personalize</button>
+
+          <button className="ndm-iconBtn" title="Save" aria-label="Save">
+            💾
+          </button>
+
+          <button className="ndm-primaryBtn">Done</button>
+        </div>
+      </div>
+
+      {/* Main work area */}
+      <div className="ndm-main">
+        {/* Left: AskAI panel */}
+        <div className="ndm-card ndm-askai">
+          <div className="ndm-askaiHeader">
+            <div className="ndm-askaiBadge">✦</div>
+            <div className="ndm-askaiTitle">AskAI</div>
+          </div>
+
+          <div className="ndm-askaiBody">
+            <div className="ndm-askaiHeroIcon">✦</div>
+            <div className="ndm-askaiHeroText">Build Native display content with AI</div>
+
+            <div className="ndm-askaiSub">Example queries</div>
+
+            <div className="ndm-exampleList">
+              {ASK_AI_EXAMPLES.map((ex) => (
+                <button
+                  key={ex}
+                  className="ndm-examplePill"
+                  onClick={() => {
+                    setPrompt(ex);
+                    generateNew(ex);
+                  }}
+                  disabled={loading}
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+
+            <div className="ndm-divider" />
+
+            <div className="ndm-fieldLabel">Prompt</div>
+            <textarea className="ndm-textarea" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+
+            <div className="ndm-row">
+              <div className="ndm-col">
+                <div className="ndm-fieldLabel">Template</div>
+                <select className="ndm-select" value={template} onChange={(e) => applyTemplateDefaults(e.target.value as PopupType)}>
+                  <option value="modal">Modal</option>
+                  <option value="banner">Banner</option>
+                  <option value="slideup">Slide-up</option>
+                </select>
+              </div>
+              <div className="ndm-col">
+                <div className="ndm-fieldLabel">Mode</div>
+                <select className="ndm-select" value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="ndm-row">
+              <div className="ndm-col">
+                <div className="ndm-fieldLabel">Brand</div>
+                <input className="ndm-input" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="ndm-row ndm-rowCenter">
+              <label className="ndm-check">
+                <input type="checkbox" checked={useOpenAI} onChange={(e) => setUseOpenAI(e.target.checked)} />
+                <span>Use OpenAI</span>
+              </label>
+            </div>
+
+            {useOpenAI && (
+              <div className="ndm-aiBox">
+                <div className="ndm-fieldLabel">OpenAI API key</div>
+                <input
+                  className="ndm-input"
+                  type="password"
+                  value={openaiKey}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  placeholder="sk-..."
+                />
+
+                <label className="ndm-check ndm-checkSmall">
+                  <input type="checkbox" checked={persistKey} onChange={(e) => setPersistKey(e.target.checked)} />
+                  <span>Remember key in this browser</span>
+                </label>
+
+                <div className="ndm-fieldLabel">Model</div>
+                <input className="ndm-input" value={model} onChange={(e) => setModel(e.target.value)} />
+              </div>
+            )}
+
+            <div className="ndm-actions">
+              <button className="ndm-btn" onClick={() => generateNew()} disabled={loading || prompt.trim().length === 0}>
+                {loading ? "Working..." : "Generate"}
+              </button>
+              <button
+                className="ndm-btnGhost"
+                onClick={() => {
+                  setSpec(null);
+                  setError(null);
+                }}
+                disabled={loading}
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="ndm-divider" />
+
+            <div className="ndm-fieldLabel">Refine</div>
+            <textarea className="ndm-textarea" value={refinePrompt} onChange={(e) => setRefinePrompt(e.target.value)} />
+
+            <button className="ndm-btn" onClick={refineExisting} disabled={loading || !spec || refinePrompt.trim().length === 0}>
+              {loading ? "Working..." : "Refine existing"}
+            </button>
+
+            {error && <div className="ndm-error">Error: {error}</div>}
+            {spec?.warnings?.length ? (
+              <div className="ndm-warnBox">
+                <div className="ndm-warnTitle">Warnings</div>
+                <ul>
+                  {spec.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Middle: Elements + Properties (Inspector) */}
+        <div className="ndm-card ndm-builder">
+          <div className="ndm-builderTop">
+            <div className="ndm-builderTopLeft">
+              <div className="ndm-builderTab">ELEMENTS</div>
+              <button className="ndm-plusBtn" title="Add element" aria-label="Add element">
+                +
+              </button>
+            </div>
+
+            <div className="ndm-builderTopRight">
+              <div className="ndm-builderTab">PROPERTIES OF</div>
+              <div className="ndm-builderTabValue">{spec ? "Button 1" : "—"}</div>
+              <button className="ndm-iconBtn ndm-mini" title="Code" aria-label="Code">
+                {"</>"}
+              </button>
+            </div>
+          </div>
+
+          <div className="ndm-builderBody">
+            <div className="ndm-elementsPane">
+              <div className="ndm-elementsList">
+                <div className="ndm-el">Container</div>
+                <div className="ndm-el ndm-elSub">🖼️ Image 1</div>
+                <div className="ndm-el ndm-elSub">T Text 1</div>
+                <div className={"ndm-el ndm-elSub ndm-elSelected"}>▭ Button 1</div>
+                <div className="ndm-el ndm-elSub">▭ Button 2</div>
+              </div>
+            </div>
+
+            <div className="ndm-propertiesPane">
+              {spec ? (
+                <Inspector
+                  spec={spec}
+                  onChange={(next) => {
+                    normalizeAndSet(next);
+                  }}
+                />
+              ) : (
+                <div className="ndm-emptyProps">Generate a popup to edit properties.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Preview Canvas */}
+        <div className="ndm-card ndm-preview">
+          <div className="ndm-canvasTop">
+            <select className="ndm-zoomSelect" defaultValue="100">
+              <option value="50">50%</option>
+              <option value="75">75%</option>
+              <option value="100">100%</option>
+              <option value="125">125%</option>
+            </select>
+          </div>
+
+          <div className="ndm-canvas">
+            {spec ? <PopupPreview spec={spec} onClose={() => {}} /> : <div className="ndm-emptyPreview">Generate to preview.</div>}
+          </div>
+
+          {/* Optional: show JSON (kept for developer visibility) */}
+          <details className="ndm-json">
+            <summary>PopupSpec JSON</summary>
+            <pre className="ndm-code">{prettyJSON || "{ }"}</pre>
+          </details>
+        </div>
+      </div>
+    </div>
+  );
+}
