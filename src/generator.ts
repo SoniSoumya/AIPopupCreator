@@ -18,10 +18,13 @@ export function generateSpecDeterministic(
   const hasSecondary = /secondary|later|not now|dismiss/.test(lower);
 
   const headline =
-    /welcome|onboard|new user/.test(lower) ? "Welcome!" :
-    /discount|offer|sale|%|coupon/.test(lower) ? "Limited-time offer" :
-    /update|announce|new feature/.test(lower) ? "What’s new" :
-    "Quick update";
+    /welcome|onboard|new user/.test(lower)
+      ? "Welcome!"
+      : /discount|offer|sale|%|coupon/.test(lower)
+        ? "Limited-time offer"
+        : /update|announce|new feature/.test(lower)
+          ? "What’s new"
+          : "Quick update";
 
   let body =
     /discount|offer|sale|%|coupon/.test(lower)
@@ -35,10 +38,7 @@ export function generateSpecDeterministic(
   if (/minimal|minimalist|shorter|shorten/.test(lower)) body = body.slice(0, 70).replace(/\s+\S*$/, "") + ".";
 
   const primaryLabel =
-    /shop/.test(lower) ? "Shop Now" :
-    /learn/.test(lower) ? "Learn More" :
-    /start/.test(lower) ? "Get Started" :
-    "Continue";
+    /shop/.test(lower) ? "Shop Now" : /learn/.test(lower) ? "Learn More" : /start/.test(lower) ? "Get Started" : "Continue";
 
   const dflt = defaultsForType(type);
 
@@ -62,8 +62,8 @@ export function generateSpecDeterministic(
       headline,
       body,
       image: wantsImage
-        ? { kind: "url", url: "https://placehold.co/800x400/png", alt: "Placeholder image" }
-        : { kind: "none" },
+        ? { enabled: true, url: "https://placehold.co/800x400/png", alt: "Placeholder image" }
+        : { enabled: false },
     },
     ctas: [
       { id: "primary", label: primaryLabel, action: { type: "url", value: "https://example.com" }, style: "primary" },
@@ -88,8 +88,7 @@ export async function generateSpecWithOpenAI(args: {
 }): Promise<unknown> {
   const { apiKey, prompt, brandColor, mode, type, model, currentSpec } = args;
 
-  // NOTE: OpenAI's structured output validator requires `type` at many nodes
-  // (even when using `const` / `enum`).
+  // IMPORTANT: No oneOf/anyOf in this schema (validator rejects oneOf in your setup).
   const schema = {
     type: "object",
     additionalProperties: false,
@@ -126,26 +125,14 @@ export async function generateSpecWithOpenAI(args: {
           headline: { type: "string", minLength: 1, maxLength: 80 },
           body: { type: "string", minLength: 1, maxLength: 240 },
           image: {
-            oneOf: [
-              {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  kind: { type: "string", const: "none" },
-                },
-                required: ["kind"],
-              },
-              {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  kind: { type: "string", const: "url" },
-                  url: { type: "string" },
-                  alt: { type: "string", minLength: 1, maxLength: 120 },
-                },
-                required: ["kind", "url", "alt"],
-              },
-            ],
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              enabled: { type: "boolean" },
+              url: { type: "string" },
+              alt: { type: "string", minLength: 1, maxLength: 120 },
+            },
+            required: ["enabled"],
           },
         },
         required: ["headline", "body", "image"],
@@ -161,25 +148,13 @@ export async function generateSpecWithOpenAI(args: {
             id: { type: "string", enum: ["primary", "secondary"] },
             label: { type: "string", minLength: 1, maxLength: 30 },
             action: {
-              oneOf: [
-                {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    type: { type: "string", const: "dismiss" },
-                  },
-                  required: ["type"],
-                },
-                {
-                  type: "object",
-                  additionalProperties: false,
-                  properties: {
-                    type: { type: "string", const: "url" },
-                    value: { type: "string" },
-                  },
-                  required: ["type", "value"],
-                },
-              ],
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                type: { type: "string", enum: ["dismiss", "url"] },
+                value: { type: "string" },
+              },
+              required: ["type"],
             },
             style: { type: "string", enum: ["primary", "secondary"] },
           },
@@ -203,15 +178,19 @@ export async function generateSpecWithOpenAI(args: {
   const instructions =
     "Return ONLY a JSON object that matches the JSON schema strictly. " +
     "Do not include any additional keys. Keep copy concise. " +
-    "When an image is needed, use url: https://placehold.co/800x400/png. " +
-    "Always set theme.mode, theme.brandColor, and type based on the provided constraints.";
+    "Always set theme.mode, theme.brandColor, and type based on the provided constraints. " +
+    "Image rules: if an image is needed, set content.image.enabled=true and include url=https://placehold.co/800x400/png and a short alt. " +
+    "If no image is needed, set content.image.enabled=false and omit url/alt. " +
+    "CTA rules: for action.type='url', include action.value as a valid URL; for action.type='dismiss', omit action.value.";
 
   const userContent =
     `Constraints:\n` +
     `- type: ${type}\n` +
     `- mode: ${mode}\n` +
     `- brandColor: ${brandColor}\n\n` +
-    (currentSpec ? `Current PopupSpec (modify this according to the instruction):\n${JSON.stringify(currentSpec)}\n\n` : "") +
+    (currentSpec
+      ? `Current PopupSpec (modify this according to the instruction):\n${JSON.stringify(currentSpec)}\n\n`
+      : "") +
     `Instruction:\n${prompt}\n`;
 
   const body = {
@@ -230,7 +209,7 @@ export async function generateSpecWithOpenAI(args: {
 
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
-    headers: { "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
   });
 
