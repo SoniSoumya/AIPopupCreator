@@ -10,12 +10,27 @@ const LS_KEY = "aipopupcreator_openai_key";
 
 function computeWarnings(s: PopupSpec): string[] {
   const warnings: string[] = [];
+
   if (s.content.headline.length > 45) warnings.push("Headline is long; consider shortening.");
   if (s.content.body.length > 140) warnings.push("Body is long; consider shortening.");
+
   const primary = s.ctas.find((c) => c.id === "primary");
   if (primary && primary.label.length > 20) warnings.push("CTA label is long; consider shortening.");
-  if (s.content.image.kind === "none" && s.layout.structure === "image_top") warnings.push("Layout requests image but image.kind is none.");
-  if (s.content.image.kind === "url" && s.layout.structure === "no_image") warnings.push("Image is set but layout structure is no_image.");
+
+  if (!s.content.image.enabled && s.layout.structure === "image_top")
+    warnings.push("Layout requests image but image.enabled is false.");
+
+  if (s.content.image.enabled && s.layout.structure === "no_image")
+    warnings.push("Image is enabled but layout structure is no_image.");
+
+  if (s.content.image.enabled && (!s.content.image.url || !s.content.image.alt))
+    warnings.push("Image is enabled but url/alt is missing.");
+
+  // CTA sanity
+  for (const c of s.ctas) {
+    if (c.action.type === "url" && !c.action.value) warnings.push(`CTA '${c.id}' action is url but value is missing.`);
+  }
+
   return warnings;
 }
 
@@ -46,7 +61,6 @@ export default function App() {
     setTemplate(type);
     const d = defaultsForType(type);
     if (spec) {
-      // keep content/ctas, adjust layout defaults
       const next: PopupSpec = { ...spec, type, layout: { ...spec.layout, ...d } } as any;
       setSpec(next);
     }
@@ -121,17 +135,23 @@ export default function App() {
           currentSpec: spec,
         });
       } else {
-        // deterministic: just regenerate from combined instruction (MVP)
-        data = generateSpecDeterministic(refinePrompt, brandColor, mode, template);
-        // keep original CTA URL if present
-        const parsedOld = spec;
-        if (PopupSpecSchema.safeParse(data).success) {
-          const d = data as PopupSpec;
-          const oldPrimary = parsedOld.ctas.find(c => c.id === "primary");
-          const newPrimary = d.ctas.find(c => c.id === "primary");
-          if (oldPrimary?.action.type === "url" && newPrimary?.action.type === "url") newPrimary.action.value = oldPrimary.action.value;
-          data = d;
+        // Deterministic MVP refine: regenerate from refine prompt only, keep some continuity
+        const regenerated = generateSpecDeterministic(refinePrompt, brandColor, mode, template);
+
+        // preserve existing primary URL if present
+        const oldPrimary = spec.ctas.find((c) => c.id === "primary");
+        const newPrimary = regenerated.ctas.find((c) => c.id === "primary");
+        if (oldPrimary?.action.type === "url" && newPrimary?.action.type === "url") {
+          newPrimary.action.value = oldPrimary.action.value;
         }
+
+        // preserve image if enabled in old spec and new spec has image disabled but layout wants image
+        if (spec.content.image.enabled && !regenerated.content.image.enabled) {
+          regenerated.content.image = { ...spec.content.image };
+          regenerated.layout.structure = "image_top";
+        }
+
+        data = regenerated;
       }
 
       const parsed = PopupSpecSchema.safeParse(data);
@@ -201,16 +221,24 @@ export default function App() {
           {useOpenAI && (
             <>
               <div className="notice">
-                This is a client-side OpenAI call. Your API key can be exposed in a static site. Use only for private
-                demos/testing. For production, move this behind a serverless proxy.
+                This is a client-side OpenAI call. Your API key can be exposed in a static site. Use only for private demos/testing.
+                For production, move this behind a serverless proxy.
               </div>
 
               <label className="label">OpenAI API key</label>
-              <input className="input" type="password" value={openaiKey} onChange={(e) => setOpenaiKey(e.target.value)} placeholder="sk-..." />
+              <input
+                className="input"
+                type="password"
+                value={openaiKey}
+                onChange={(e) => setOpenaiKey(e.target.value)}
+                placeholder="sk-..."
+              />
 
               <div className="checkboxRow">
                 <input id="persistKey" type="checkbox" checked={persistKey} onChange={(e) => setPersistKey(e.target.checked)} />
-                <label htmlFor="persistKey" className="small">Remember key in this browser (localStorage)</label>
+                <label htmlFor="persistKey" className="small">
+                  Remember key in this browser (localStorage)
+                </label>
               </div>
 
               <label className="label">Model</label>
@@ -223,14 +251,26 @@ export default function App() {
             <button className="button" onClick={generateNew} disabled={loading || prompt.trim().length === 0}>
               {loading ? "Working..." : "Generate new"}
             </button>
-            <button className="buttonSecondary" onClick={() => { setSpec(null); setError(null); }} disabled={loading}>
+            <button
+              className="buttonSecondary"
+              onClick={() => {
+                setSpec(null);
+                setError(null);
+              }}
+              disabled={loading}
+            >
               Clear
             </button>
           </div>
 
           <div className="groupTitle">Refine</div>
           <label className="label">Refinement instruction (uses current spec)</label>
-          <textarea className="textarea" style={{ minHeight: 90 }} value={refinePrompt} onChange={(e) => setRefinePrompt(e.target.value)} />
+          <textarea
+            className="textarea"
+            style={{ minHeight: 90 }}
+            value={refinePrompt}
+            onChange={(e) => setRefinePrompt(e.target.value)}
+          />
 
           <button className="button" onClick={refineExisting} disabled={loading || !spec || refinePrompt.trim().length === 0}>
             {loading ? "Working..." : "Refine existing"}
@@ -241,7 +281,9 @@ export default function App() {
             <div className="warnings">
               <div className="warningsTitle">Warnings</div>
               <ul>
-                {spec.warnings.map((w, i) => (<li key={i}>{w}</li>))}
+                {spec.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
               </ul>
             </div>
           ) : null}
@@ -250,6 +292,7 @@ export default function App() {
         <section className="card">
           <div className="cardTitle">Preview</div>
           {spec ? <PopupPreview spec={spec} onClose={() => {}} /> : <div className="empty">Generate a popup to preview.</div>}
+
           <div className="groupTitle">PopupSpec JSON</div>
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
             <div className="hint">This is what you will save/publish and render in-app.</div>
