@@ -24,16 +24,22 @@ export const PopupSpecSchema = z.object({
   content: z.object({
     headline: z.string().min(1).max(80),
     body: z.string().min(1).max(240),
+
+    // Always present keys: enabled/url/alt
     image: z
       .object({
         enabled: z.boolean(),
-        url: z.string().url().optional(),
-        alt: z.string().min(1).max(120).optional(),
+        url: z.string(),
+        alt: z.string(),
       })
       .superRefine((val, ctx) => {
         if (val.enabled) {
-          if (!val.url) ctx.addIssue({ code: "custom", message: "image.url is required when image.enabled is true." });
-          if (!val.alt) ctx.addIssue({ code: "custom", message: "image.alt is required when image.enabled is true." });
+          if (!val.url || !/^https?:\/\//.test(val.url)) {
+            ctx.addIssue({ code: "custom", message: "image.url must be a valid URL when image.enabled is true." });
+          }
+          if (!val.alt || val.alt.trim().length < 1) {
+            ctx.addIssue({ code: "custom", message: "image.alt is required when image.enabled is true." });
+          }
         }
       }),
   }),
@@ -42,14 +48,17 @@ export const PopupSpecSchema = z.object({
       z.object({
         id: z.enum(["primary", "secondary"]),
         label: z.string().min(1).max(30),
+        // Always present keys: type/value
         action: z
           .object({
             type: z.enum(["dismiss", "url"]),
-            value: z.string().url().optional(),
+            value: z.string(),
           })
           .superRefine((val, ctx) => {
-            if (val.type === "url" && !val.value) {
-              ctx.addIssue({ code: "custom", message: "action.value is required when action.type is 'url'." });
+            if (val.type === "url") {
+              if (!val.value || !/^https?:\/\//.test(val.value)) {
+                ctx.addIssue({ code: "custom", message: "action.value must be a valid URL when action.type is 'url'." });
+              }
             }
           }),
         style: z.enum(["primary", "secondary"]),
