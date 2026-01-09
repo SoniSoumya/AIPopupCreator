@@ -1,137 +1,244 @@
-import type { PopupDoc, PopupElement } from "../spec";
+import React, { useMemo } from "react";
+import type { PopupSpec } from "../spec";
 
 type Props = {
-  doc: PopupDoc;
+  spec: PopupSpec;
   selectedId: string;
   onSelect: (id: string) => void;
+  onChangeSpec: (next: PopupSpec) => void;
 };
 
-function elementKey(e: PopupElement) {
-  return e.id;
+function spacingToCss(s: { top: number; right: number; bottom: number; left: number }) {
+  return `${s.top}px ${s.right}px ${s.bottom}px ${s.left}px`;
 }
 
-export function PopupPreview({ doc, selectedId, onSelect }: Props) {
-  const c = doc.container;
+function alignToCss(a: string) {
+  if (a === "center") return "center";
+  if (a === "right") return "flex-end";
+  return "flex-start";
+}
 
-  const frameWidth = Math.min(c.maxWidth, 520); // keep preview reasonable
-  const frameHeight = Math.round(frameWidth / c.aspectRatio);
+export default function PopupPreview({ spec, selectedId, onSelect, onChangeSpec }: Props) {
+  const elements = useMemo(() => [...spec.elements].sort((a, b) => a.order - b.order), [spec.elements]);
 
-  const chrome = c.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(2,6,23,0.10)";
-  const backdrop = c.mode === "dark" ? "rgba(0,0,0,0.55)" : "rgba(2,6,23,0.35)";
+  const selectedIndex = useMemo(() => elements.findIndex((e) => e.id === selectedId), [elements, selectedId]);
+
+  const moveSelected = (dir: -1 | 1) => {
+    if (selectedIndex < 0) return;
+    const next = [...elements];
+    const idx = selectedIndex;
+    const swapWith = idx + dir;
+    if (swapWith < 0 || swapWith >= next.length) return;
+
+    // swap order values to keep stable
+    const a = next[idx];
+    const b = next[swapWith];
+    const ao = a.order;
+    a.order = b.order;
+    b.order = ao;
+
+    onChangeSpec({ ...spec, elements: next });
+  };
+
+  const duplicateSelected = () => {
+    const el = elements.find((e) => e.id === selectedId);
+    if (!el) return;
+    const copy: any = JSON.parse(JSON.stringify(el));
+    copy.id = `${el.id}_copy_${Date.now().toString(16)}`;
+    copy.name = `${el.name} (copy)`;
+    copy.order = el.order + 1;
+    const next = [...spec.elements, copy].sort((a, b) => a.order - b.order).map((e, i) => ({ ...e, order: (i + 1) * 10 }));
+    onChangeSpec({ ...spec, elements: next });
+    onSelect(copy.id);
+  };
+
+  const deleteSelected = () => {
+    if (selectedId === "container") return;
+    const next = spec.elements.filter((e) => e.id !== selectedId).sort((a, b) => a.order - b.order).map((e, i) => ({ ...e, order: (i + 1) * 10 }));
+    onChangeSpec({ ...spec, elements: next });
+    onSelect("container");
+  };
+
+  const ratioPadding = (() => {
+    const ar = spec.container.aspectRatio;
+    if (ar === "1:1") return "100%";
+    if (ar === "4:3") return "75%";
+    if (ar === "16:9") return "56.25%";
+    return null;
+  })();
 
   return (
-    <div className="pv-wrap">
-      {c.backdrop && <div className="pv-backdrop" style={{ background: backdrop }} />}
+    <div className="previewWrap">
+      <div className="previewStage">
+        {spec.container.backdrop && <div className="backdrop" />}
 
-      <div
-        className="pv-frame"
-        style={{
-          width: frameWidth,
-          height: frameHeight,
-          borderRadius: c.cornerRadius,
-          background: c.backgroundColor,
-          color: c.textColor,
-          border: `1px solid ${chrome}`,
-        }}
-      >
-        {c.showCloseIcon && (
-          <button
-            className="pv-close"
-            style={{ borderColor: chrome, color: c.textColor }}
-            aria-label="Close"
-            title="Close"
+        <div className="popupShell" style={{ maxWidth: spec.container.maxWidth }}>
+          <div
+            className={selectedId === "container" ? "popupCard selected" : "popupCard"}
+            style={{
+              borderRadius: spec.container.cornerRadius,
+              background: spec.container.backgroundColor || spec.theme.backgroundColor,
+              color: spec.theme.textColor,
+              padding: spec.container.padding,
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect("container");
+            }}
           >
-            ×
-          </button>
-        )}
+            {spec.container.showCloseIcon && (
+              <button
+                className="closeBtn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // demo only
+                }}
+                aria-label="Close"
+                title="Close"
+              >
+                ×
+              </button>
+            )}
 
-        <div className="pv-stack">
-          {doc.elements
-            .filter((e) => !e.hidden)
-            .map((e) => {
-              const isSelected = selectedId === e.id;
-
-              if (e.kind === "image") {
-                return (
-                  <div
-                    key={elementKey(e)}
-                    className={"pv-el " + (isSelected ? "pv-elSelected" : "")}
-                    onClick={() => onSelect(e.id)}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <div
-                      style={{
-                        borderRadius: e.cornerRadius,
-                        overflow: "hidden",
-                        height: e.height,
-                        border: `1px solid ${chrome}`,
-                      }}
-                    >
-                      <img
-                        src={e.url}
-                        alt={e.alt}
-                        style={{ width: "100%", height: "100%", objectFit: e.fit, display: "block" }}
-                      />
-                    </div>
-                  </div>
-                );
-              }
-
-              if (e.kind === "text") {
-                return (
-                  <div
-                    key={elementKey(e)}
-                    className={"pv-el " + (isSelected ? "pv-elSelected" : "")}
-                    onClick={() => onSelect(e.id)}
-                    role="button"
-                    tabIndex={0}
-                    style={{
-                      fontFamily: e.fontFamily,
-                      fontSize: e.fontSize,
-                      fontWeight: e.fontWeight as any,
-                      textAlign: e.align as any,
-                      color: e.color,
-                      lineHeight: e.fontSize >= 20 ? 1.2 : 1.45,
-                      letterSpacing: e.fontWeight >= 800 ? "-0.2px" : "0px",
-                    }}
-                  >
-                    {e.text}
-                  </div>
-                );
-              }
-
-              // button
-              return (
-                <div
-                  key={elementKey(e)}
-                  className={"pv-el " + (isSelected ? "pv-elSelected" : "")}
-                  onClick={() => onSelect(e.id)}
-                  role="button"
-                  tabIndex={0}
-                  style={{ display: "flex", justifyContent: "center" }}
-                >
-                  <button
-                    style={{
-                      width: e.fullWidth ? "100%" : "auto",
-                      minWidth: e.fullWidth ? "auto" : 140,
-                      padding: "12px 14px",
-                      borderRadius: e.cornerRadius,
-                      border: "1px solid rgba(0,0,0,0)",
-                      background: e.fillColor,
-                      color: e.textColor,
-                      fontWeight: e.fontWeight as any,
-                      fontSize: e.fontSize,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {e.label}
-                  </button>
+            {/* ratio frame */}
+            {ratioPadding ? (
+              <div className="ratioBox">
+                <div className="ratioSizer" style={{ paddingBottom: ratioPadding }} />
+                <div className="ratioContent">
+                  <ElementsList spec={spec} elements={elements} selectedId={selectedId} onSelect={onSelect} />
                 </div>
-              );
-            })}
+              </div>
+            ) : (
+              <ElementsList spec={spec} elements={elements} selectedId={selectedId} onSelect={onSelect} />
+            )}
+
+            {selectedId !== "container" && selectedIndex >= 0 && (
+              <div className="overlayToolbar">
+                <button className="tbBtn" onClick={(e) => (e.stopPropagation(), moveSelected(-1))} disabled={selectedIndex === 0}>
+                  Up
+                </button>
+                <button className="tbBtn" onClick={(e) => (e.stopPropagation(), moveSelected(1))} disabled={selectedIndex === elements.length - 1}>
+                  Down
+                </button>
+                <button className="tbBtn" onClick={(e) => (e.stopPropagation(), duplicateSelected())}>
+                  Duplicate
+                </button>
+                <button className="tbBtn danger" onClick={(e) => (e.stopPropagation(), deleteSelected())}>
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ElementsList({
+  spec,
+  elements,
+  selectedId,
+  onSelect,
+}: {
+  spec: PopupSpec;
+  elements: any[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="elementsCol">
+      {elements.map((el) => {
+        const isSelected = el.id === selectedId;
+        const commonStyle: React.CSSProperties = {
+          margin: spacingToCss(el.margin),
+          padding: spacingToCss(el.padding),
+          alignSelf: alignToCss(el.align),
+          position: "relative",
+        };
+
+        if (el.type === "text") {
+          return (
+            <div
+              key={el.id}
+              className={isSelected ? "elBox selected" : "elBox"}
+              style={commonStyle}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(el.id);
+              }}
+            >
+              <div
+                style={{
+                  fontSize: el.fontSize,
+                  fontWeight: el.fontWeight,
+                  color: el.color || spec.theme.textColor,
+                  lineHeight: 1.25,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {el.text}
+              </div>
+            </div>
+          );
+        }
+
+        if (el.type === "image") {
+          return (
+            <div
+              key={el.id}
+              className={isSelected ? "elBox selected" : "elBox"}
+              style={commonStyle}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(el.id);
+              }}
+            >
+              <img
+                src={el.url}
+                alt={el.alt}
+                style={{
+                  width: "100%",
+                  height: el.height,
+                  objectFit: "cover",
+                  borderRadius: el.radius,
+                  display: "block",
+                }}
+              />
+            </div>
+          );
+        }
+
+        // cta
+        const bg = el.variant === "primary" ? spec.theme.brandColor : "transparent";
+        const border = el.variant === "primary" ? "transparent" : "rgba(148,163,184,0.7)";
+        const color = el.variant === "primary" ? "#FFFFFF" : spec.theme.textColor;
+
+        return (
+          <div
+            key={el.id}
+            className={isSelected ? "elBox selected" : "elBox"}
+            style={{ ...commonStyle, width: el.fullWidth ? "100%" : "auto" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(el.id);
+            }}
+          >
+            <button
+              className="ctaBtn"
+              style={{
+                background: bg,
+                border: `1px solid ${border}`,
+                color,
+                width: el.fullWidth ? "100%" : "auto",
+              }}
+              onClick={(e) => e.preventDefault()}
+            >
+              {el.label}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
