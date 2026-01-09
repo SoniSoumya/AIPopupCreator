@@ -188,8 +188,13 @@ export async function generateSpecWithOpenAI(args: {
     instructions,
     input: [{ role: "user", content: userContent }],
     text: {
-      format: { type: "json_schema", strict: true, schema },
-    },
+      format: {
+        type: "json_schema",
+        name: "popup_spec",
+        strict: true,
+        schema,
+  },
+},
   };
 
   const res = await fetch("https://api.openai.com/v1/responses", {
