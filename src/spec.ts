@@ -24,24 +24,34 @@ export const PopupSpecSchema = z.object({
   content: z.object({
     headline: z.string().min(1).max(80),
     body: z.string().min(1).max(240),
-    image: z.union([
-      z.object({ kind: z.literal("none") }),
-      z.object({
-        kind: z.literal("url"),
-        url: z.string().url(),
-        alt: z.string().min(1).max(120),
+    image: z
+      .object({
+        enabled: z.boolean(),
+        url: z.string().url().optional(),
+        alt: z.string().min(1).max(120).optional(),
+      })
+      .superRefine((val, ctx) => {
+        if (val.enabled) {
+          if (!val.url) ctx.addIssue({ code: "custom", message: "image.url is required when image.enabled is true." });
+          if (!val.alt) ctx.addIssue({ code: "custom", message: "image.alt is required when image.enabled is true." });
+        }
       }),
-    ]),
   }),
   ctas: z
     .array(
       z.object({
         id: z.enum(["primary", "secondary"]),
         label: z.string().min(1).max(30),
-        action: z.union([
-          z.object({ type: z.literal("dismiss") }),
-          z.object({ type: z.literal("url"), value: z.string().url() }),
-        ]),
+        action: z
+          .object({
+            type: z.enum(["dismiss", "url"]),
+            value: z.string().url().optional(),
+          })
+          .superRefine((val, ctx) => {
+            if (val.type === "url" && !val.value) {
+              ctx.addIssue({ code: "custom", message: "action.value is required when action.type is 'url'." });
+            }
+          }),
         style: z.enum(["primary", "secondary"]),
       })
     )
