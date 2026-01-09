@@ -15,9 +15,9 @@ export function Inspector({ spec, onChange }: Props) {
   const primary = spec.ctas.find((c) => c.id === "primary");
   const secondary = spec.ctas.find((c) => c.id === "secondary");
 
-  function update(path: (draft: PopupSpec) => void) {
+  function update(mutator: (draft: PopupSpec) => void) {
     const next: PopupSpec = JSON.parse(JSON.stringify(spec));
-    path(next);
+    mutator(next);
     onChange(next);
   }
 
@@ -27,7 +27,7 @@ export function Inspector({ spec, onChange }: Props) {
       <div className="row">
         <div className="field">
           <label className="label">Type</label>
-          <select className="input" value={spec.type} onChange={(e) => update(d => { d.type = e.target.value as any; })}>
+          <select className="input" value={spec.type} onChange={(e) => update((d) => { d.type = e.target.value as any; })}>
             <option value="modal">Modal</option>
             <option value="banner">Banner</option>
             <option value="slideup">Slide-up</option>
@@ -38,7 +38,7 @@ export function Inspector({ spec, onChange }: Props) {
           <select
             className="input"
             value={spec.layout.structure}
-            onChange={(e) => update(d => { d.layout.structure = e.target.value as any; })}
+            onChange={(e) => update((d) => { d.layout.structure = e.target.value as any; })}
           >
             <option value="image_top">Image top</option>
             <option value="no_image">No image</option>
@@ -52,7 +52,7 @@ export function Inspector({ spec, onChange }: Props) {
           <input
             className="input"
             value={spec.layout.padding}
-            onChange={(e) => update(d => { d.layout.padding = clampInt(e.target.value, 0, 48, d.layout.padding); })}
+            onChange={(e) => update((d) => { d.layout.padding = clampInt(e.target.value, 0, 48, d.layout.padding); })}
           />
         </div>
         <div className="field">
@@ -60,7 +60,7 @@ export function Inspector({ spec, onChange }: Props) {
           <input
             className="input"
             value={spec.layout.cornerRadius}
-            onChange={(e) => update(d => { d.layout.cornerRadius = clampInt(e.target.value, 0, 40, d.layout.cornerRadius); })}
+            onChange={(e) => update((d) => { d.layout.cornerRadius = clampInt(e.target.value, 0, 40, d.layout.cornerRadius); })}
           />
         </div>
         <div className="field">
@@ -68,7 +68,7 @@ export function Inspector({ spec, onChange }: Props) {
           <input
             className="input"
             value={spec.layout.maxWidth}
-            onChange={(e) => update(d => { d.layout.maxWidth = clampInt(e.target.value, 280, 860, d.layout.maxWidth); })}
+            onChange={(e) => update((d) => { d.layout.maxWidth = clampInt(e.target.value, 280, 860, d.layout.maxWidth); })}
           />
         </div>
       </div>
@@ -77,72 +77,83 @@ export function Inspector({ spec, onChange }: Props) {
       <div className="row">
         <div className="field">
           <label className="label">Mode</label>
-          <select className="input" value={spec.theme.mode} onChange={(e) => update(d => { d.theme.mode = e.target.value as any; })}>
+          <select className="input" value={spec.theme.mode} onChange={(e) => update((d) => { d.theme.mode = e.target.value as any; })}>
             <option value="light">Light</option>
             <option value="dark">Dark</option>
           </select>
         </div>
         <div className="field">
           <label className="label">Brand color</label>
-          <input className="input" value={spec.theme.brandColor} onChange={(e) => update(d => { d.theme.brandColor = e.target.value; })} />
+          <input className="input" value={spec.theme.brandColor} onChange={(e) => update((d) => { d.theme.brandColor = e.target.value; })} />
         </div>
       </div>
+
       <div className="row">
         <div className="field">
           <label className="label">Background</label>
-          <input className="input" value={spec.theme.backgroundColor} onChange={(e) => update(d => { d.theme.backgroundColor = e.target.value; })} />
+          <input className="input" value={spec.theme.backgroundColor} onChange={(e) => update((d) => { d.theme.backgroundColor = e.target.value; })} />
         </div>
         <div className="field">
           <label className="label">Text</label>
-          <input className="input" value={spec.theme.textColor} onChange={(e) => update(d => { d.theme.textColor = e.target.value; })} />
+          <input className="input" value={spec.theme.textColor} onChange={(e) => update((d) => { d.theme.textColor = e.target.value; })} />
         </div>
         <div className="field">
           <label className="label">Muted text</label>
-          <input className="input" value={spec.theme.mutedTextColor} onChange={(e) => update(d => { d.theme.mutedTextColor = e.target.value; })} />
+          <input className="input" value={spec.theme.mutedTextColor} onChange={(e) => update((d) => { d.theme.mutedTextColor = e.target.value; })} />
         </div>
       </div>
 
       <div className="groupTitle">Content</div>
       <label className="label">Headline</label>
-      <input className="input" value={spec.content.headline} onChange={(e) => update(d => { d.content.headline = e.target.value; })} />
+      <input className="input" value={spec.content.headline} onChange={(e) => update((d) => { d.content.headline = e.target.value; })} />
 
       <label className="label">Body</label>
-      <textarea className="textarea" style={{ minHeight: 90 }} value={spec.content.body} onChange={(e) => update(d => { d.content.body = e.target.value; })} />
+      <textarea className="textarea" style={{ minHeight: 90 }} value={spec.content.body} onChange={(e) => update((d) => { d.content.body = e.target.value; })} />
 
       <div className="row">
         <div className="field">
-          <label className="label">Image kind</label>
+          <label className="label">Image</label>
           <select
             className="input"
-            value={spec.content.image.kind}
-            onChange={(e) => update(d => {
-              const kind = e.target.value as any;
-              if (kind === "none") d.content.image = { kind: "none" } as any;
-              else d.content.image = { kind: "url", url: "https://placehold.co/800x400/png", alt: "Placeholder image" } as any;
-              d.layout.structure = kind === "none" ? "no_image" : "image_top";
-            })}
+            value={spec.content.image.enabled ? "on" : "off"}
+            onChange={(e) =>
+              update((d) => {
+                const on = e.target.value === "on";
+                if (on) {
+                  d.content.image.enabled = true;
+                  d.content.image.url = d.content.image.url || "https://placehold.co/800x400/png";
+                  d.content.image.alt = d.content.image.alt || "Placeholder image";
+                  d.layout.structure = "image_top";
+                } else {
+                  d.content.image.enabled = false;
+                  delete (d.content.image as any).url;
+                  delete (d.content.image as any).alt;
+                  d.layout.structure = "no_image";
+                }
+              })
+            }
           >
-            <option value="none">None</option>
-            <option value="url">URL</option>
+            <option value="off">Off</option>
+            <option value="on">On</option>
           </select>
         </div>
 
-        {spec.content.image.kind === "url" && (
+        {spec.content.image.enabled && (
           <>
             <div className="field">
               <label className="label">Image URL</label>
               <input
                 className="input"
-                value={spec.content.image.url}
-                onChange={(e) => update(d => { if (d.content.image.kind === "url") d.content.image.url = e.target.value; })}
+                value={spec.content.image.url || ""}
+                onChange={(e) => update((d) => { d.content.image.url = e.target.value; })}
               />
             </div>
             <div className="field">
               <label className="label">Alt text</label>
               <input
                 className="input"
-                value={spec.content.image.alt}
-                onChange={(e) => update(d => { if (d.content.image.kind === "url") d.content.image.alt = e.target.value; })}
+                value={spec.content.image.alt || ""}
+                onChange={(e) => update((d) => { d.content.image.alt = e.target.value; })}
               />
             </div>
           </>
@@ -150,25 +161,53 @@ export function Inspector({ spec, onChange }: Props) {
       </div>
 
       <div className="groupTitle">CTAs</div>
+
       <label className="label">Primary label</label>
       <input
         className="input"
         value={primary?.label || ""}
-        onChange={(e) => update(d => {
-          const p = d.ctas.find(c => c.id === "primary");
-          if (p) p.label = e.target.value;
-        })}
+        onChange={(e) =>
+          update((d) => {
+            const p = d.ctas.find((c) => c.id === "primary");
+            if (p) p.label = e.target.value;
+          })
+        }
       />
 
-      <label className="label">Primary URL</label>
-      <input
+      <label className="label">Primary action</label>
+      <select
         className="input"
-        value={(primary && primary.action.type === "url" ? primary.action.value : "") || ""}
-        onChange={(e) => update(d => {
-          const p = d.ctas.find(c => c.id === "primary");
-          if (p && p.action.type === "url") p.action.value = e.target.value;
-        })}
-      />
+        value={primary?.action.type || "url"}
+        onChange={(e) =>
+          update((d) => {
+            const p = d.ctas.find((c) => c.id === "primary");
+            if (!p) return;
+            const t = e.target.value as "dismiss" | "url";
+            p.action.type = t;
+            if (t === "dismiss") delete (p.action as any).value;
+            if (t === "url") p.action.value = p.action.value || "https://example.com";
+          })
+        }
+      >
+        <option value="url">URL</option>
+        <option value="dismiss">Dismiss</option>
+      </select>
+
+      {primary?.action.type === "url" && (
+        <>
+          <label className="label">Primary URL</label>
+          <input
+            className="input"
+            value={primary.action.value || ""}
+            onChange={(e) =>
+              update((d) => {
+                const p = d.ctas.find((c) => c.id === "primary");
+                if (p && p.action.type === "url") p.action.value = e.target.value;
+              })
+            }
+          />
+        </>
+      )}
 
       <div className="row">
         <div className="field">
@@ -176,48 +215,103 @@ export function Inspector({ spec, onChange }: Props) {
           <select
             className="input"
             value={secondary ? "on" : "off"}
-            onChange={(e) => update(d => {
-              const on = e.target.value === "on";
-              const has = d.ctas.some(c => c.id === "secondary");
-              if (on && !has) {
-                d.ctas.push({ id: "secondary", label: "Later", action: { type: "dismiss" }, style: "secondary" } as any);
-              }
-              if (!on && has) {
-                d.ctas = d.ctas.filter(c => c.id !== "secondary");
-              }
-            })}
+            onChange={(e) =>
+              update((d) => {
+                const on = e.target.value === "on";
+                const has = d.ctas.some((c) => c.id === "secondary");
+                if (on && !has) {
+                  d.ctas.push({
+                    id: "secondary",
+                    label: "Later",
+                    action: { type: "dismiss" },
+                    style: "secondary",
+                  } as any);
+                }
+                if (!on && has) d.ctas = d.ctas.filter((c) => c.id !== "secondary");
+              })
+            }
           >
             <option value="off">Off</option>
             <option value="on">On</option>
           </select>
         </div>
+
         {secondary && (
           <div className="field">
             <label className="label">Secondary label</label>
             <input
               className="input"
               value={secondary.label}
-              onChange={(e) => update(d => {
-                const s = d.ctas.find(c => c.id === "secondary");
-                if (s) s.label = e.target.value;
-              })}
+              onChange={(e) =>
+                update((d) => {
+                  const s = d.ctas.find((c) => c.id === "secondary");
+                  if (s) s.label = e.target.value;
+                })
+              }
             />
           </div>
         )}
       </div>
 
+      {secondary && (
+        <>
+          <label className="label">Secondary action</label>
+          <select
+            className="input"
+            value={secondary.action.type}
+            onChange={(e) =>
+              update((d) => {
+                const s = d.ctas.find((c) => c.id === "secondary");
+                if (!s) return;
+                const t = e.target.value as "dismiss" | "url";
+                s.action.type = t;
+                if (t === "dismiss") delete (s.action as any).value;
+                if (t === "url") s.action.value = s.action.value || "https://example.com";
+              })
+            }
+          >
+            <option value="dismiss">Dismiss</option>
+            <option value="url">URL</option>
+          </select>
+
+          {secondary.action.type === "url" && (
+            <>
+              <label className="label">Secondary URL</label>
+              <input
+                className="input"
+                value={secondary.action.value || ""}
+                onChange={(e) =>
+                  update((d) => {
+                    const s = d.ctas.find((c) => c.id === "secondary");
+                    if (s && s.action.type === "url") s.action.value = e.target.value;
+                  })
+                }
+              />
+            </>
+          )}
+        </>
+      )}
+
       <div className="groupTitle">Behavior</div>
       <div className="row">
         <div className="field">
           <label className="label">Dismissible</label>
-          <select className="input" value={spec.behavior.dismissible ? "yes" : "no"} onChange={(e) => update(d => { d.behavior.dismissible = e.target.value === "yes"; })}>
+          <select
+            className="input"
+            value={spec.behavior.dismissible ? "yes" : "no"}
+            onChange={(e) => update((d) => { d.behavior.dismissible = e.target.value === "yes"; })}
+          >
             <option value="yes">Yes</option>
             <option value="no">No</option>
           </select>
         </div>
         <div className="field">
           <label className="label">Backdrop (modal)</label>
-          <select className="input" value={spec.behavior.backdrop ? "yes" : "no"} onChange={(e) => update(d => { d.behavior.backdrop = e.target.value === "yes"; })}>
+          <select
+            className="input"
+            value={spec.behavior.backdrop ? "yes" : "no"}
+            onChange={(e) => update((d) => { d.behavior.backdrop = e.target.value === "yes"; })}
+          >
             <option value="yes">Yes</option>
             <option value="no">No</option>
           </select>
