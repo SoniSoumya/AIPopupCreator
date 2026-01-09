@@ -14,6 +14,12 @@ export function PopupPreview({ spec, onClose }: Props) {
   const chrome = theme.mode === "dark" ? "rgba(255,255,255,0.10)" : "rgba(2,6,23,0.10)";
   const backdrop = theme.mode === "dark" ? "rgba(0,0,0,0.55)" : "rgba(2,6,23,0.35)";
 
+  const showImage =
+    layout.structure === "image_top" &&
+    content.image.enabled &&
+    Boolean(content.image.url) &&
+    Boolean(content.image.alt);
+
   const card = (
     <div
       style={{
@@ -49,11 +55,11 @@ export function PopupPreview({ spec, onClose }: Props) {
         </button>
       )}
 
-      {layout.structure === "image_top" && content.image.kind === "url" && (
+      {showImage && (
         <div style={{ width: "100%", aspectRatio: type === "banner" ? "3 / 1" : "2 / 1", overflow: "hidden" }}>
           <img
-            src={content.image.url}
-            alt={content.image.alt}
+            src={content.image.url!}
+            alt={content.image.alt!}
             style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           />
         </div>
@@ -102,7 +108,6 @@ export function PopupPreview({ spec, onClose }: Props) {
     </div>
   );
 
-  // Preview canvas
   return (
     <div
       style={{
@@ -118,11 +123,16 @@ export function PopupPreview({ spec, onClose }: Props) {
         padding: 18,
       }}
     >
-      {behavior.backdrop && type === "modal" && (
-        <div style={{ position: "absolute", inset: 0, background: backdrop }} />
-      )}
+      {behavior.backdrop && type === "modal" && <div style={{ position: "absolute", inset: 0, background: backdrop }} />}
 
-      <div style={{ position: "relative", width: "100%", display: "grid", placeItems: type === "slideup" ? "end center" : "center" }}>
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          display: "grid",
+          placeItems: type === "slideup" ? "end center" : "center",
+        }}
+      >
         {card}
       </div>
     </div>
