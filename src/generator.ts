@@ -33,7 +33,6 @@ export function generateSpecDeterministic(
         ? "Here’s a quick tour to help you get started."
         : "Take a moment to review this message.";
 
-  // refine hints
   if (/more urgent|urgent|hurry/.test(lower)) body = body.replace(/Limited time only\.?/i, "Ends soon.");
   if (/minimal|minimalist|shorter|shorten/.test(lower)) body = body.slice(0, 70).replace(/\s+\S*$/, "") + ".";
 
@@ -61,13 +60,17 @@ export function generateSpecDeterministic(
     content: {
       headline,
       body,
+      // IMPORTANT: url/alt ALWAYS present for schema compatibility.
       image: wantsImage
         ? { enabled: true, url: "https://placehold.co/800x400/png", alt: "Placeholder image" }
-        : { enabled: false },
+        : { enabled: false, url: "", alt: "" },
     },
     ctas: [
+      // IMPORTANT: action.value ALWAYS present for schema compatibility.
       { id: "primary", label: primaryLabel, action: { type: "url", value: "https://example.com" }, style: "primary" },
-      ...(hasSecondary ? [{ id: "secondary", label: "Later", action: { type: "dismiss" }, style: "secondary" }] : []),
+      ...(hasSecondary
+        ? [{ id: "secondary", label: "Later", action: { type: "dismiss", value: "" }, style: "secondary" }]
+        : []),
     ],
     behavior: {
       dismissible: true,
@@ -88,13 +91,14 @@ export async function generateSpecWithOpenAI(args: {
 }): Promise<unknown> {
   const { apiKey, prompt, brandColor, mode, type, model, currentSpec } = args;
 
-  // IMPORTANT: No oneOf/anyOf in this schema (validator rejects oneOf in your setup).
+  // No oneOf/anyOf. Also: validator requires `required` includes ALL keys in properties.
   const schema = {
     type: "object",
     additionalProperties: false,
     properties: {
       type: { type: "string", enum: ["modal", "banner", "slideup"] },
       version: { type: "string", const: "1.0" },
+
       layout: {
         type: "object",
         additionalProperties: false,
@@ -106,6 +110,7 @@ export async function generateSpecWithOpenAI(args: {
         },
         required: ["structure", "padding", "cornerRadius", "maxWidth"],
       },
+
       theme: {
         type: "object",
         additionalProperties: false,
@@ -118,6 +123,7 @@ export async function generateSpecWithOpenAI(args: {
         },
         required: ["mode", "brandColor", "backgroundColor", "textColor", "mutedTextColor"],
       },
+
       content: {
         type: "object",
         additionalProperties: false,
@@ -130,13 +136,15 @@ export async function generateSpecWithOpenAI(args: {
             properties: {
               enabled: { type: "boolean" },
               url: { type: "string" },
-              alt: { type: "string", minLength: 1, maxLength: 120 },
+              alt: { type: "string" },
             },
-            required: ["enabled"],
+            // REQUIRED must include ALL properties keys per validator
+            required: ["enabled", "url", "alt"],
           },
         },
         required: ["headline", "body", "image"],
       },
+
       ctas: {
         type: "array",
         minItems: 1,
@@ -154,13 +162,15 @@ export async function generateSpecWithOpenAI(args: {
                 type: { type: "string", enum: ["dismiss", "url"] },
                 value: { type: "string" },
               },
-              required: ["type"],
+              // REQUIRED must include ALL properties keys per validator
+              required: ["type", "value"],
             },
             style: { type: "string", enum: ["primary", "secondary"] },
           },
           required: ["id", "label", "action", "style"],
         },
       },
+
       behavior: {
         type: "object",
         additionalProperties: false,
@@ -170,27 +180,27 @@ export async function generateSpecWithOpenAI(args: {
         },
         required: ["dismissible", "backdrop"],
       },
+
       warnings: { type: "array", items: { type: "string" } },
     },
     required: ["type", "version", "layout", "theme", "content", "ctas", "behavior", "warnings"],
   };
 
   const instructions =
-    "Return ONLY a JSON object that matches the JSON schema strictly. " +
-    "Do not include any additional keys. Keep copy concise. " +
-    "Always set theme.mode, theme.brandColor, and type based on the provided constraints. " +
-    "Image rules: if an image is needed, set content.image.enabled=true and include url=https://placehold.co/800x400/png and a short alt. " +
-    "If no image is needed, set content.image.enabled=false and omit url/alt. " +
-    "CTA rules: for action.type='url', include action.value as a valid URL; for action.type='dismiss', omit action.value.";
+    "Return ONLY a JSON object that matches the JSON schema strictly. Do not include any additional keys. " +
+    "Keep copy concise. Always set theme.mode, theme.brandColor, and type based on the provided constraints. " +
+    "IMPORTANT: content.image must ALWAYS include keys enabled, url, alt. " +
+    "If no image is needed: set enabled=false and set url='' and alt=''. " +
+    "If image is needed: set enabled=true, url='https://placehold.co/800x400/png', and alt to a short description. " +
+    "IMPORTANT: each CTA action must ALWAYS include keys type and value. " +
+    "If action.type='dismiss': set value='' (empty string). If action.type='url': set value to a valid URL string.";
 
   const userContent =
     `Constraints:\n` +
     `- type: ${type}\n` +
     `- mode: ${mode}\n` +
     `- brandColor: ${brandColor}\n\n` +
-    (currentSpec
-      ? `Current PopupSpec (modify this according to the instruction):\n${JSON.stringify(currentSpec)}\n\n`
-      : "") +
+    (currentSpec ? `Current PopupSpec (modify this according to the instruction):\n${JSON.stringify(currentSpec)}\n\n` : "") +
     `Instruction:\n${prompt}\n`;
 
   const body = {
