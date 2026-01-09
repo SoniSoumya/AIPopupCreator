@@ -26,13 +26,19 @@ function computeWarnings(s: PopupSpec): string[] {
   if (s.content.image.enabled && (!s.content.image.url || !s.content.image.alt))
     warnings.push("Image is enabled but url/alt is missing.");
 
-  // CTA sanity
   for (const c of s.ctas) {
     if (c.action.type === "url" && !c.action.value) warnings.push(`CTA '${c.id}' action is url but value is missing.`);
   }
 
   return warnings;
 }
+
+const ASK_AI_EXAMPLES = [
+  "Sale announcement for the christmas",
+  "Upcoming Black friday sale with upto 50% off",
+  "Lead generation popup with email ID field",
+  "Survey template with 5 star for user rating",
+];
 
 export default function App() {
   const [template, setTemplate] = useState<PopupType>("modal");
@@ -53,7 +59,6 @@ export default function App() {
   const [spec, setSpec] = useState<PopupSpec | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const prettyJSON = useMemo(() => (spec ? JSON.stringify(spec, null, 2) : ""), [spec]);
 
@@ -66,12 +71,23 @@ export default function App() {
     }
   }
 
-  async function generateNew() {
+  function normalizeAndSet(next: PopupSpec) {
+    const parsed = PopupSpecSchema.safeParse(next);
+    if (!parsed.success) {
+      setError("Inspector changes produced invalid spec. Revert the last change.");
+      return;
+    }
+    const warnings = computeWarnings(parsed.data);
+    setSpec({ ...parsed.data, warnings: [...parsed.data.warnings.filter(Boolean), ...warnings] });
+  }
+
+  async function generateNew(fromExample?: string) {
     setLoading(true);
     setError(null);
-    setCopied(false);
 
     try {
+      const effectivePrompt = fromExample ?? prompt;
+
       let data: unknown;
 
       if (useOpenAI) {
@@ -81,7 +97,7 @@ export default function App() {
 
         data = await generateSpecWithOpenAI({
           apiKey: openaiKey.trim(),
-          prompt,
+          prompt: effectivePrompt,
           brandColor,
           mode,
           type: template,
@@ -89,7 +105,7 @@ export default function App() {
           currentSpec: null,
         });
       } else {
-        data = generateSpecDeterministic(prompt, brandColor, mode, template);
+        data = generateSpecDeterministic(effectivePrompt, brandColor, mode, template);
       }
 
       const parsed = PopupSpecSchema.safeParse(data);
@@ -115,7 +131,6 @@ export default function App() {
 
     setLoading(true);
     setError(null);
-    setCopied(false);
 
     try {
       let data: unknown;
@@ -135,7 +150,6 @@ export default function App() {
           currentSpec: spec,
         });
       } else {
-        // Deterministic MVP refine: regenerate from refine prompt only, keep some continuity
         const regenerated = generateSpecDeterministic(refinePrompt, brandColor, mode, template);
 
         // preserve existing primary URL if present
@@ -145,7 +159,7 @@ export default function App() {
           newPrimary.action.value = oldPrimary.action.value;
         }
 
-        // preserve image if enabled in old spec and new spec has image disabled but layout wants image
+        // preserve image if enabled
         if (spec.content.image.enabled && !regenerated.content.image.enabled) {
           regenerated.content.image = { ...spec.content.image };
           regenerated.layout.structure = "image_top";
@@ -155,174 +169,3 @@ export default function App() {
       }
 
       const parsed = PopupSpecSchema.safeParse(data);
-      if (!parsed.success) {
-        setError("Refined spec failed validation. Try a more specific refinement prompt.");
-        return;
-      }
-
-      const warnings = computeWarnings(parsed.data);
-      setSpec({ ...parsed.data, warnings: [...parsed.data.warnings, ...warnings] });
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to refine");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onCopyJSON() {
-    if (!spec) return;
-    await navigator.clipboard.writeText(prettyJSON);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 900);
-  }
-
-  return (
-    <div className="page">
-      <header className="header">
-        <div className="title">AI-native In-App Popup Builder (Web MVP)</div>
-        <div className="subtitle">Template switch + Inspector + Prompt refine loop (GitHub Pages ready)</div>
-      </header>
-
-      <div className="grid">
-        <section className="card">
-          <div className="cardTitle">Generate</div>
-
-          <label className="label">Template</label>
-          <select className="input" value={template} onChange={(e) => applyTemplateDefaults(e.target.value as PopupType)}>
-            <option value="modal">Modal</option>
-            <option value="banner">Banner</option>
-            <option value="slideup">Slide-up</option>
-          </select>
-
-          <label className="label">Prompt</label>
-          <textarea className="textarea" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-
-          <div className="row">
-            <div className="field">
-              <label className="label">Brand color</label>
-              <input className="input" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} />
-            </div>
-            <div className="field">
-              <label className="label">Mode</label>
-              <select className="input" value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="checkboxRow">
-            <input id="useOpenAI" type="checkbox" checked={useOpenAI} onChange={(e) => setUseOpenAI(e.target.checked)} />
-            <label htmlFor="useOpenAI" className="label" style={{ margin: 0 }}>
-              Use OpenAI (client-side)
-            </label>
-          </div>
-
-          {useOpenAI && (
-            <>
-              <div className="notice">
-                This is a client-side OpenAI call. Your API key can be exposed in a static site. Use only for private demos/testing.
-                For production, move this behind a serverless proxy.
-              </div>
-
-              <label className="label">OpenAI API key</label>
-              <input
-                className="input"
-                type="password"
-                value={openaiKey}
-                onChange={(e) => setOpenaiKey(e.target.value)}
-                placeholder="sk-..."
-              />
-
-              <div className="checkboxRow">
-                <input id="persistKey" type="checkbox" checked={persistKey} onChange={(e) => setPersistKey(e.target.checked)} />
-                <label htmlFor="persistKey" className="small">
-                  Remember key in this browser (localStorage)
-                </label>
-              </div>
-
-              <label className="label">Model</label>
-              <input className="input" value={model} onChange={(e) => setModel(e.target.value)} />
-              <div className="small">Model must support structured JSON outputs with JSON schema.</div>
-            </>
-          )}
-
-          <div className="dualButtons">
-            <button className="button" onClick={generateNew} disabled={loading || prompt.trim().length === 0}>
-              {loading ? "Working..." : "Generate new"}
-            </button>
-            <button
-              className="buttonSecondary"
-              onClick={() => {
-                setSpec(null);
-                setError(null);
-              }}
-              disabled={loading}
-            >
-              Clear
-            </button>
-          </div>
-
-          <div className="groupTitle">Refine</div>
-          <label className="label">Refinement instruction (uses current spec)</label>
-          <textarea
-            className="textarea"
-            style={{ minHeight: 90 }}
-            value={refinePrompt}
-            onChange={(e) => setRefinePrompt(e.target.value)}
-          />
-
-          <button className="button" onClick={refineExisting} disabled={loading || !spec || refinePrompt.trim().length === 0}>
-            {loading ? "Working..." : "Refine existing"}
-          </button>
-
-          {error && <div className="error">Error: {error}</div>}
-          {spec?.warnings?.length ? (
-            <div className="warnings">
-              <div className="warningsTitle">Warnings</div>
-              <ul>
-                {spec.warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="card">
-          <div className="cardTitle">Preview</div>
-          {spec ? <PopupPreview spec={spec} onClose={() => {}} /> : <div className="empty">Generate a popup to preview.</div>}
-
-          <div className="groupTitle">PopupSpec JSON</div>
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-            <div className="hint">This is what you will save/publish and render in-app.</div>
-            <button className="buttonSecondary" onClick={onCopyJSON} disabled={!spec}>
-              {copied ? "Copied" : "Copy JSON"}
-            </button>
-          </div>
-          <pre className="code">{prettyJSON || "{ }"}</pre>
-        </section>
-
-        <section className="card">
-          <div className="cardTitle">Inspector</div>
-          {spec ? (
-            <Inspector
-              spec={spec}
-              onChange={(next) => {
-                const parsed = PopupSpecSchema.safeParse(next);
-                if (!parsed.success) {
-                  setError("Inspector changes produced invalid spec. Revert the last change.");
-                  return;
-                }
-                const warnings = computeWarnings(parsed.data);
-                setSpec({ ...parsed.data, warnings: [...parsed.data.warnings.filter(Boolean), ...warnings] });
-              }}
-            />
-          ) : (
-            <div className="empty">Generate a popup to edit properties.</div>
-          )}
-        </section>
-      </div>
-    </div>
-  );
-}
