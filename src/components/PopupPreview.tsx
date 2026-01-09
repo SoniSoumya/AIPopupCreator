@@ -11,14 +11,11 @@ export function PopupPreview({ spec, onClose }: Props) {
   const primary = ctas.find((c) => c.id === "primary");
   const secondary = ctas.find((c) => c.id === "secondary");
 
-  const chrome = theme.mode === "dark" ? "rgba(255,255,255,0.10)" : "rgba(2,6,23,0.10)";
+  const chrome = theme.mode === "dark" ? "rgba(255,255,255,0.12)" : "rgba(2,6,23,0.10)";
   const backdrop = theme.mode === "dark" ? "rgba(0,0,0,0.55)" : "rgba(2,6,23,0.35)";
 
   const showImage =
-    layout.structure === "image_top" &&
-    content.image.enabled &&
-    Boolean(content.image.url) &&
-    Boolean(content.image.alt);
+    layout.structure === "image_top" && content.image.enabled && Boolean(content.image.url) && Boolean(content.image.alt);
 
   const card = (
     <div
@@ -28,7 +25,7 @@ export function PopupPreview({ spec, onClose }: Props) {
         background: theme.backgroundColor,
         color: theme.textColor,
         borderRadius: type === "banner" ? 14 : layout.cornerRadius,
-        boxShadow: type === "banner" ? "0 10px 26px rgba(2,6,23,0.18)" : "0 18px 50px rgba(2,6,23,0.22)",
+        boxShadow: "0 18px 50px rgba(2,6,23,0.18)",
         border: "1px solid " + chrome,
         overflow: "hidden",
       }}
@@ -47,6 +44,8 @@ export function PopupPreview({ spec, onClose }: Props) {
             background: "transparent",
             color: theme.textColor,
             cursor: "pointer",
+            fontSize: 18,
+            lineHeight: "34px",
           }}
           aria-label="Close"
           title="Close"
@@ -58,8 +57,8 @@ export function PopupPreview({ spec, onClose }: Props) {
       {showImage && (
         <div style={{ width: "100%", aspectRatio: type === "banner" ? "3 / 1" : "2 / 1", overflow: "hidden" }}>
           <img
-            src={content.image.url!}
-            alt={content.image.alt!}
+            src={content.image.url}
+            alt={content.image.alt}
             style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           />
         </div>
@@ -69,6 +68,7 @@ export function PopupPreview({ spec, onClose }: Props) {
         <div style={{ fontSize: type === "banner" ? 16 : 20, fontWeight: 750, lineHeight: 1.2, marginBottom: 8 }}>
           {content.headline}
         </div>
+
         <div style={{ fontSize: 14, lineHeight: 1.45, color: theme.mutedTextColor, marginBottom: 16 }}>
           {content.body}
         </div>
@@ -79,10 +79,11 @@ export function PopupPreview({ spec, onClose }: Props) {
               style={{
                 padding: "10px 12px",
                 borderRadius: 12,
-                border: "1px solid " + (theme.mode === "dark" ? "rgba(255,255,255,0.14)" : "rgba(2,6,23,0.14)"),
+                border: "1px solid " + chrome,
                 background: "transparent",
                 color: theme.textColor,
                 cursor: "pointer",
+                fontWeight: 650,
               }}
             >
               {secondary.label}
@@ -98,6 +99,7 @@ export function PopupPreview({ spec, onClose }: Props) {
                 background: theme.brandColor,
                 color: "white",
                 cursor: "pointer",
+                fontWeight: 750,
               }}
             >
               {primary.label}
@@ -116,9 +118,7 @@ export function PopupPreview({ spec, onClose }: Props) {
         minHeight: 520,
         display: "grid",
         placeItems: type === "slideup" ? "end center" : "center",
-        background: "linear-gradient(180deg, rgba(2,6,23,0.06), rgba(2,6,23,0.02))",
         borderRadius: 16,
-        border: "1px solid rgba(2,6,23,0.08)",
         overflow: "hidden",
         padding: 18,
       }}
