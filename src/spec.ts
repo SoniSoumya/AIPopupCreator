@@ -1,81 +1,87 @@
-import { z } from "zod";
-
+export type PopupType = "modal" | "banner" | "slideup";
 export type Mode = "light" | "dark";
 
-export const ElementKindEnum = z.enum(["text", "image", "button"]);
-export type ElementKind = z.infer<typeof ElementKindEnum>;
+export type ElementType = "text" | "image" | "cta";
 
-export const ContainerSchema = z.object({
-  // Required keys (strict-friendly)
-  id: z.literal("container"),
-  name: z.string(),
-  mode: z.enum(["light", "dark"]),
-  aspectRatio: z.number().min(0.2).max(4), // width / height
-  maxWidth: z.number().int().min(280).max(860),
-  cornerRadius: z.number().int().min(0).max(40),
-  backgroundColor: z.string(),
-  showCloseIcon: z.boolean(),
-  backdrop: z.boolean(),
-  dismissible: z.boolean(),
-  brandColor: z.string(),
-  textColor: z.string(),
-  mutedTextColor: z.string(),
-});
+export type Spacing = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+};
 
-export type ContainerSpec = z.infer<typeof ContainerSchema>;
+export type Align = "left" | "center" | "right";
 
-export const BaseElementSchema = z.object({
-  id: z.string().min(1),
-  kind: ElementKindEnum,
-  name: z.string(),
-  hidden: z.boolean(),
-});
+export type BaseElement = {
+  id: string;
+  type: ElementType;
+  name: string;
+  order: number;
 
-export const TextElementSchema = BaseElementSchema.extend({
-  kind: z.literal("text"),
-  text: z.string(),
-  fontFamily: z.string(),
-  fontSize: z.number().int().min(10).max(72),
-  fontWeight: z.number().int().min(300).max(900),
-  align: z.enum(["left", "center", "right"]),
-  color: z.string(),
-});
+  // layout constraints
+  margin: Spacing;
+  padding: Spacing;
+  align: Align;
+};
 
-export type TextElement = z.infer<typeof TextElementSchema>;
+export type TextElement = BaseElement & {
+  type: "text";
+  text: string;
+  fontSize: number; // px
+  fontWeight: 400 | 500 | 600 | 700;
+  color?: string; // optional override; otherwise theme.textColor
+};
 
-export const ImageElementSchema = BaseElementSchema.extend({
-  kind: z.literal("image"),
-  url: z.string(),
-  alt: z.string(),
-  height: z.number().int().min(80).max(420),
-  fit: z.enum(["cover", "contain"]),
-  cornerRadius: z.number().int().min(0).max(24),
-});
+export type ImageElement = BaseElement & {
+  type: "image";
+  url: string;
+  alt: string;
+  height: number; // px
+  radius: number; // px
+};
 
-export type ImageElement = z.infer<typeof ImageElementSchema>;
+export type CtaElement = BaseElement & {
+  type: "cta";
+  label: string;
+  action: { type: "url" | "dismiss"; value?: string };
+  variant: "primary" | "secondary";
+  fullWidth: boolean;
+};
 
-export const ButtonElementSchema = BaseElementSchema.extend({
-  kind: z.literal("button"),
-  label: z.string(),
-  fontSize: z.number().int().min(10).max(28),
-  fontWeight: z.number().int().min(400).max(900),
-  cornerRadius: z.number().int().min(0).max(24),
-  fillColor: z.string(),
-  textColor: z.string(),
-  actionType: z.enum(["url", "dismiss"]),
-  actionValue: z.string(),
-  fullWidth: z.boolean(),
-});
+export type PopupTheme = {
+  mode: Mode;
+  brandColor: string;
+  backgroundColor: string;
+  textColor: string;
+  mutedTextColor: string;
+};
 
-export type ButtonElement = z.infer<typeof ButtonElementSchema>;
+export type PopupContainer = {
+  aspectRatio: "auto" | "1:1" | "4:3" | "16:9";
+  backgroundColor: string; // can override theme background
+  cornerRadius: number;
+  showCloseIcon: boolean;
+  padding: number;
+  backdrop: boolean;
+  dismissible: boolean;
+  maxWidth: number; // px
+};
 
-export const ElementSchema = z.union([TextElementSchema, ImageElementSchema, ButtonElementSchema]);
-export type PopupElement = z.infer<typeof ElementSchema>;
+export type PopupSpec = {
+  version: "2.0";
+  popupType: PopupType;
 
-export const PopupDocSchema = z.object({
-  version: z.literal("2.0"),
-  container: ContainerSchema,
-  elements: z.array(ElementSchema).min(1),
-});
+  theme: PopupTheme;
+  container: PopupContainer;
 
-export type PopupDoc = z.infer<typeof PopupDocSchema>;
+  // elements render in "order" (ascending)
+  elements: Array<TextElement | ImageElement | CtaElement>;
+
+  warnings: string[];
+};
+
+export const DEFAULT_SPACING: Spacing = { top: 0, right: 0, bottom: 0, left: 0 };
+
+export function cloneSpacing(s: Spacing): Spacing {
+  return { top: s.top, right: s.right, bottom: s.bottom, left: s.left };
+}
