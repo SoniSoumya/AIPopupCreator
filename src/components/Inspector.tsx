@@ -1,0 +1,228 @@
+import type { PopupSpec } from "../spec";
+
+type Props = {
+  spec: PopupSpec;
+  onChange: (next: PopupSpec) => void;
+};
+
+function clampInt(v: string, min: number, max: number, fallback: number) {
+  const n = Number.parseInt(v, 10);
+  if (Number.isNaN(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+export function Inspector({ spec, onChange }: Props) {
+  const primary = spec.ctas.find((c) => c.id === "primary");
+  const secondary = spec.ctas.find((c) => c.id === "secondary");
+
+  function update(path: (draft: PopupSpec) => void) {
+    const next: PopupSpec = JSON.parse(JSON.stringify(spec));
+    path(next);
+    onChange(next);
+  }
+
+  return (
+    <div>
+      <div className="groupTitle">Layout</div>
+      <div className="row">
+        <div className="field">
+          <label className="label">Type</label>
+          <select className="input" value={spec.type} onChange={(e) => update(d => { d.type = e.target.value as any; })}>
+            <option value="modal">Modal</option>
+            <option value="banner">Banner</option>
+            <option value="slideup">Slide-up</option>
+          </select>
+        </div>
+        <div className="field">
+          <label className="label">Structure</label>
+          <select
+            className="input"
+            value={spec.layout.structure}
+            onChange={(e) => update(d => { d.layout.structure = e.target.value as any; })}
+          >
+            <option value="image_top">Image top</option>
+            <option value="no_image">No image</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="row">
+        <div className="field">
+          <label className="label">Padding</label>
+          <input
+            className="input"
+            value={spec.layout.padding}
+            onChange={(e) => update(d => { d.layout.padding = clampInt(e.target.value, 0, 48, d.layout.padding); })}
+          />
+        </div>
+        <div className="field">
+          <label className="label">Corner radius</label>
+          <input
+            className="input"
+            value={spec.layout.cornerRadius}
+            onChange={(e) => update(d => { d.layout.cornerRadius = clampInt(e.target.value, 0, 40, d.layout.cornerRadius); })}
+          />
+        </div>
+        <div className="field">
+          <label className="label">Max width</label>
+          <input
+            className="input"
+            value={spec.layout.maxWidth}
+            onChange={(e) => update(d => { d.layout.maxWidth = clampInt(e.target.value, 280, 860, d.layout.maxWidth); })}
+          />
+        </div>
+      </div>
+
+      <div className="groupTitle">Theme</div>
+      <div className="row">
+        <div className="field">
+          <label className="label">Mode</label>
+          <select className="input" value={spec.theme.mode} onChange={(e) => update(d => { d.theme.mode = e.target.value as any; })}>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+        <div className="field">
+          <label className="label">Brand color</label>
+          <input className="input" value={spec.theme.brandColor} onChange={(e) => update(d => { d.theme.brandColor = e.target.value; })} />
+        </div>
+      </div>
+      <div className="row">
+        <div className="field">
+          <label className="label">Background</label>
+          <input className="input" value={spec.theme.backgroundColor} onChange={(e) => update(d => { d.theme.backgroundColor = e.target.value; })} />
+        </div>
+        <div className="field">
+          <label className="label">Text</label>
+          <input className="input" value={spec.theme.textColor} onChange={(e) => update(d => { d.theme.textColor = e.target.value; })} />
+        </div>
+        <div className="field">
+          <label className="label">Muted text</label>
+          <input className="input" value={spec.theme.mutedTextColor} onChange={(e) => update(d => { d.theme.mutedTextColor = e.target.value; })} />
+        </div>
+      </div>
+
+      <div className="groupTitle">Content</div>
+      <label className="label">Headline</label>
+      <input className="input" value={spec.content.headline} onChange={(e) => update(d => { d.content.headline = e.target.value; })} />
+
+      <label className="label">Body</label>
+      <textarea className="textarea" style={{ minHeight: 90 }} value={spec.content.body} onChange={(e) => update(d => { d.content.body = e.target.value; })} />
+
+      <div className="row">
+        <div className="field">
+          <label className="label">Image kind</label>
+          <select
+            className="input"
+            value={spec.content.image.kind}
+            onChange={(e) => update(d => {
+              const kind = e.target.value as any;
+              if (kind === "none") d.content.image = { kind: "none" } as any;
+              else d.content.image = { kind: "url", url: "https://placehold.co/800x400/png", alt: "Placeholder image" } as any;
+              d.layout.structure = kind === "none" ? "no_image" : "image_top";
+            })}
+          >
+            <option value="none">None</option>
+            <option value="url">URL</option>
+          </select>
+        </div>
+
+        {spec.content.image.kind === "url" && (
+          <>
+            <div className="field">
+              <label className="label">Image URL</label>
+              <input
+                className="input"
+                value={spec.content.image.url}
+                onChange={(e) => update(d => { if (d.content.image.kind === "url") d.content.image.url = e.target.value; })}
+              />
+            </div>
+            <div className="field">
+              <label className="label">Alt text</label>
+              <input
+                className="input"
+                value={spec.content.image.alt}
+                onChange={(e) => update(d => { if (d.content.image.kind === "url") d.content.image.alt = e.target.value; })}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="groupTitle">CTAs</div>
+      <label className="label">Primary label</label>
+      <input
+        className="input"
+        value={primary?.label || ""}
+        onChange={(e) => update(d => {
+          const p = d.ctas.find(c => c.id === "primary");
+          if (p) p.label = e.target.value;
+        })}
+      />
+
+      <label className="label">Primary URL</label>
+      <input
+        className="input"
+        value={(primary && primary.action.type === "url" ? primary.action.value : "") || ""}
+        onChange={(e) => update(d => {
+          const p = d.ctas.find(c => c.id === "primary");
+          if (p && p.action.type === "url") p.action.value = e.target.value;
+        })}
+      />
+
+      <div className="row">
+        <div className="field">
+          <label className="label">Secondary CTA</label>
+          <select
+            className="input"
+            value={secondary ? "on" : "off"}
+            onChange={(e) => update(d => {
+              const on = e.target.value === "on";
+              const has = d.ctas.some(c => c.id === "secondary");
+              if (on && !has) {
+                d.ctas.push({ id: "secondary", label: "Later", action: { type: "dismiss" }, style: "secondary" } as any);
+              }
+              if (!on && has) {
+                d.ctas = d.ctas.filter(c => c.id !== "secondary");
+              }
+            })}
+          >
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        </div>
+        {secondary && (
+          <div className="field">
+            <label className="label">Secondary label</label>
+            <input
+              className="input"
+              value={secondary.label}
+              onChange={(e) => update(d => {
+                const s = d.ctas.find(c => c.id === "secondary");
+                if (s) s.label = e.target.value;
+              })}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="groupTitle">Behavior</div>
+      <div className="row">
+        <div className="field">
+          <label className="label">Dismissible</label>
+          <select className="input" value={spec.behavior.dismissible ? "yes" : "no"} onChange={(e) => update(d => { d.behavior.dismissible = e.target.value === "yes"; })}>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+        <div className="field">
+          <label className="label">Backdrop (modal)</label>
+          <select className="input" value={spec.behavior.backdrop ? "yes" : "no"} onChange={(e) => update(d => { d.behavior.backdrop = e.target.value === "yes"; })}>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
