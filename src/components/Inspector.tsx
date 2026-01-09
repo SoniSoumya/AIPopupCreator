@@ -1,460 +1,319 @@
-import type { PopupDoc, PopupElement } from "../spec";
+import React, { useMemo } from "react";
+import type { PopupSpec, Spacing, Align } from "../spec";
 
 type Props = {
-  doc: PopupDoc;
-  selectedId: string; // "container" OR element id
-  onChange: (next: PopupDoc) => void;
+  spec: PopupSpec;
+  selectedId: string; // "container" or element.id
+  onChangeSpec: (next: PopupSpec) => void;
 };
 
-function clone<T>(x: T): T {
-  return JSON.parse(JSON.stringify(x));
-}
-
-function clampInt(v: string, min: number, max: number, fallback: number) {
-  const n = Number.parseInt(v, 10);
-  if (Number.isNaN(n)) return fallback;
+function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-function clampFloat(v: string, min: number, max: number, fallback: number) {
-  const n = Number.parseFloat(v);
-  if (Number.isNaN(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
-}
-
-export function Inspector({ doc, selectedId, onChange }: Props) {
-  const selected = selectedId === "container" ? null : doc.elements.find((e) => e.id === selectedId) || null;
-
-  function update(mutator: (draft: PopupDoc) => void) {
-    const next = clone(doc);
-    mutator(next);
-    onChange(next);
-  }
-
-  if (selectedId === "container") {
-    const c = doc.container;
-    return (
-      <div>
-        <div className="groupTitle">Container</div>
-
-        <div className="row">
-          <div className="field">
-            <label className="label">Mode</label>
-            <select className="input" value={c.mode} onChange={(e) => update((d) => (d.container.mode = e.target.value as any))}>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="label">Aspect ratio (W/H)</label>
-            <input
-              className="input"
-              value={c.aspectRatio}
-              onChange={(e) => update((d) => (d.container.aspectRatio = clampFloat(e.target.value, 0.2, 4, d.container.aspectRatio)))}
-            />
-          </div>
-        </div>
-
-        <div className="row">
-          <div className="field">
-            <label className="label">Max width</label>
-            <input
-              className="input"
-              value={c.maxWidth}
-              onChange={(e) => update((d) => (d.container.maxWidth = clampInt(e.target.value, 280, 860, d.container.maxWidth)))}
-            />
-          </div>
-          <div className="field">
-            <label className="label">Corner radius</label>
-            <input
-              className="input"
-              value={c.cornerRadius}
-              onChange={(e) => update((d) => (d.container.cornerRadius = clampInt(e.target.value, 0, 40, d.container.cornerRadius)))}
-            />
-          </div>
-        </div>
-
-        <label className="label">Background color</label>
-        <input className="input" value={c.backgroundColor} onChange={(e) => update((d) => (d.container.backgroundColor = e.target.value))} />
-
-        <div className="row">
-          <label className="check">
-            <input type="checkbox" checked={c.showCloseIcon} onChange={(e) => update((d) => (d.container.showCloseIcon = e.target.checked))} />
-            <span>Close icon</span>
-          </label>
-
-          <label className="check">
-            <input type="checkbox" checked={c.backdrop} onChange={(e) => update((d) => (d.container.backdrop = e.target.checked))} />
-            <span>Backdrop</span>
-          </label>
-
-          <label className="check">
-            <input type="checkbox" checked={c.dismissible} onChange={(e) => update((d) => (d.container.dismissible = e.target.checked))} />
-            <span>Dismissible</span>
-          </label>
-        </div>
-
-        <div className="groupTitle">Theme</div>
-
-        <div className="row">
-          <div className="field">
-            <label className="label">Brand color</label>
-            <input className="input" value={c.brandColor} onChange={(e) => update((d) => (d.container.brandColor = e.target.value))} />
-          </div>
-          <div className="field">
-            <label className="label">Text color</label>
-            <input className="input" value={c.textColor} onChange={(e) => update((d) => (d.container.textColor = e.target.value))} />
-          </div>
-        </div>
-
-        <label className="label">Muted text color</label>
-        <input className="input" value={c.mutedTextColor} onChange={(e) => update((d) => (d.container.mutedTextColor = e.target.value))} />
-      </div>
-    );
-  }
-
-  if (!selected) {
-    return <div className="emptyProps">Select an element to edit properties.</div>;
-  }
-
-  // Element inspector
+function numberInput(value: number, onChange: (v: number) => void, min?: number, max?: number) {
   return (
-    <div>
-      <div className="groupTitle">{selected.name}</div>
+    <input
+      type="number"
+      value={value}
+      min={min}
+      max={max}
+      onChange={(e) => {
+        const v = Number(e.target.value);
+        if (Number.isFinite(v)) onChange(max != null ? clamp(v, min ?? -Infinity, max) : v);
+      }}
+      className="inp"
+    />
+  );
+}
 
-      <div className="row">
-        <div className="field">
-          <label className="label">Name</label>
-          <input
-            className="input"
-            value={selected.name}
-            onChange={(e) =>
-              update((d) => {
-                const el = d.elements.find((x) => x.id === selected.id);
-                if (el) el.name = e.target.value;
-              })
-            }
-          />
+function spacingEditor(label: string, v: Spacing, onChange: (next: Spacing) => void) {
+  const set = (k: keyof Spacing, n: number) => onChange({ ...v, [k]: n });
+  return (
+    <div className="field">
+      <div className="fieldLabel">{label}</div>
+      <div className="grid4">
+        <div className="mini">
+          <div className="miniLabel">Top</div>
+          {numberInput(v.top, (n) => set("top", clamp(n, 0, 80)), 0, 80)}
         </div>
+        <div className="mini">
+          <div className="miniLabel">Right</div>
+          {numberInput(v.right, (n) => set("right", clamp(n, 0, 80)), 0, 80)}
+        </div>
+        <div className="mini">
+          <div className="miniLabel">Bottom</div>
+          {numberInput(v.bottom, (n) => set("bottom", clamp(n, 0, 80)), 0, 80)}
+        </div>
+        <div className="mini">
+          <div className="miniLabel">Left</div>
+          {numberInput(v.left, (n) => set("left", clamp(n, 0, 80)), 0, 80)}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={!selected.hidden}
-            onChange={(e) =>
-              update((d) => {
-                const el = d.elements.find((x) => x.id === selected.id);
-                if (el) el.hidden = !e.target.checked;
-              })
-            }
-          />
-          <span>Visible</span>
-        </label>
+export default function Inspector({ spec, selectedId, onChangeSpec }: Props) {
+  const selected = useMemo(() => {
+    if (selectedId === "container") return null;
+    return spec.elements.find((e) => e.id === selectedId) || null;
+  }, [spec.elements, selectedId]);
+
+  const title = selectedId === "container" ? "Container properties" : selected?.name || "Properties";
+
+  const setContainer = (patch: Partial<PopupSpec["container"]>) => {
+    onChangeSpec({ ...spec, container: { ...spec.container, ...patch } });
+  };
+
+  const setTheme = (patch: Partial<PopupSpec["theme"]>) => {
+    onChangeSpec({ ...spec, theme: { ...spec.theme, ...patch } });
+  };
+
+  const setElement = (patch: any) => {
+    if (!selected) return;
+    onChangeSpec({
+      ...spec,
+      elements: spec.elements.map((e) => (e.id === selected.id ? { ...e, ...patch } : e)),
+    });
+  };
+
+  const setAlign = (align: Align) => setElement({ align });
+
+  return (
+    <div className="panel">
+      <div className="panelHeader">
+        <div className="panelTitle">{title}</div>
       </div>
 
-      {selected.kind === "text" && (
-        <>
-          <label className="label">Text</label>
-          <textarea
-            className="textarea"
-            value={selected.text}
-            onChange={(e) =>
-              update((d) => {
-                const el = d.elements.find((x) => x.id === selected.id) as any;
-                if (el) el.text = e.target.value;
-              })
-            }
-            style={{ minHeight: 110 }}
-          />
+      <div className="panelBody">
+        {selectedId === "container" ? (
+          <>
+            <div className="sectionTitle">Popup</div>
 
-          <div className="row">
             <div className="field">
-              <label className="label">Font</label>
-              <input
-                className="input"
-                value={selected.fontFamily}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.fontFamily = e.target.value;
-                  })
-                }
-              />
-            </div>
-            <div className="field">
-              <label className="label">Font size</label>
-              <input
-                className="input"
-                value={selected.fontSize}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.fontSize = clampInt(e.target.value, 10, 72, el.fontSize);
-                  })
-                }
-              />
-            </div>
-          </div>
-
-          <div className="row">
-            <div className="field">
-              <label className="label">Weight</label>
-              <input
-                className="input"
-                value={selected.fontWeight}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.fontWeight = clampInt(e.target.value, 300, 900, el.fontWeight);
-                  })
-                }
-              />
+              <div className="fieldLabel">Popup type</div>
+              <div className="pill">{spec.popupType}</div>
             </div>
 
             <div className="field">
-              <label className="label">Align</label>
+              <div className="fieldLabel">Aspect ratio</div>
               <select
-                className="input"
-                value={selected.align}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.align = e.target.value;
-                  })
-                }
+                className="sel"
+                value={spec.container.aspectRatio}
+                onChange={(e) => setContainer({ aspectRatio: e.target.value as any })}
               >
-                <option value="left">Left</option>
-                <option value="center">Center</option>
-                <option value="right">Right</option>
-              </select>
-            </div>
-          </div>
-
-          <label className="label">Color</label>
-          <input
-            className="input"
-            value={selected.color}
-            onChange={(e) =>
-              update((d) => {
-                const el = d.elements.find((x) => x.id === selected.id) as any;
-                if (el) el.color = e.target.value;
-              })
-            }
-          />
-        </>
-      )}
-
-      {selected.kind === "image" && (
-        <>
-          <label className="label">Image URL</label>
-          <input
-            className="input"
-            value={selected.url}
-            onChange={(e) =>
-              update((d) => {
-                const el = d.elements.find((x) => x.id === selected.id) as any;
-                if (el) el.url = e.target.value;
-              })
-            }
-          />
-
-          <label className="label">Alt</label>
-          <input
-            className="input"
-            value={selected.alt}
-            onChange={(e) =>
-              update((d) => {
-                const el = d.elements.find((x) => x.id === selected.id) as any;
-                if (el) el.alt = e.target.value;
-              })
-            }
-          />
-
-          <div className="row">
-            <div className="field">
-              <label className="label">Height</label>
-              <input
-                className="input"
-                value={selected.height}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.height = clampInt(e.target.value, 80, 420, el.height);
-                  })
-                }
-              />
-            </div>
-            <div className="field">
-              <label className="label">Fit</label>
-              <select
-                className="input"
-                value={selected.fit}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.fit = e.target.value;
-                  })
-                }
-              >
-                <option value="cover">Cover</option>
-                <option value="contain">Contain</option>
-              </select>
-            </div>
-          </div>
-
-          <label className="label">Corner radius</label>
-          <input
-            className="input"
-            value={selected.cornerRadius}
-            onChange={(e) =>
-              update((d) => {
-                const el = d.elements.find((x) => x.id === selected.id) as any;
-                if (el) el.cornerRadius = clampInt(e.target.value, 0, 24, el.cornerRadius);
-              })
-            }
-          />
-        </>
-      )}
-
-      {selected.kind === "button" && (
-        <>
-          <label className="label">Button text</label>
-          <input
-            className="input"
-            value={selected.label}
-            onChange={(e) =>
-              update((d) => {
-                const el = d.elements.find((x) => x.id === selected.id) as any;
-                if (el) el.label = e.target.value;
-              })
-            }
-          />
-
-          <div className="row">
-            <div className="field">
-              <label className="label">Font size</label>
-              <input
-                className="input"
-                value={selected.fontSize}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.fontSize = clampInt(e.target.value, 10, 28, el.fontSize);
-                  })
-                }
-              />
-            </div>
-            <div className="field">
-              <label className="label">Weight</label>
-              <input
-                className="input"
-                value={selected.fontWeight}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.fontWeight = clampInt(e.target.value, 400, 900, el.fontWeight);
-                  })
-                }
-              />
-            </div>
-          </div>
-
-          <div className="row">
-            <div className="field">
-              <label className="label">Corner radius</label>
-              <input
-                className="input"
-                value={selected.cornerRadius}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.cornerRadius = clampInt(e.target.value, 0, 24, el.cornerRadius);
-                  })
-                }
-              />
-            </div>
-            <label className="check">
-              <input
-                type="checkbox"
-                checked={selected.fullWidth}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.fullWidth = e.target.checked;
-                  })
-                }
-              />
-              <span>Full width</span>
-            </label>
-          </div>
-
-          <div className="row">
-            <div className="field">
-              <label className="label">Fill color</label>
-              <input
-                className="input"
-                value={selected.fillColor}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.fillColor = e.target.value;
-                  })
-                }
-              />
-            </div>
-            <div className="field">
-              <label className="label">Text color</label>
-              <input
-                className="input"
-                value={selected.textColor}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.textColor = e.target.value;
-                  })
-                }
-              />
-            </div>
-          </div>
-
-          <div className="row">
-            <div className="field">
-              <label className="label">On tap</label>
-              <select
-                className="input"
-                value={selected.actionType}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (!el) return;
-                    el.actionType = e.target.value;
-                    if (el.actionType === "dismiss") el.actionValue = "";
-                    if (el.actionType === "url" && !el.actionValue) el.actionValue = "https://example.com";
-                  })
-                }
-              >
-                <option value="url">Open URL</option>
-                <option value="dismiss">Dismiss</option>
+                <option value="auto">auto</option>
+                <option value="1:1">1:1</option>
+                <option value="4:3">4:3</option>
+                <option value="16:9">16:9</option>
               </select>
             </div>
 
             <div className="field">
-              <label className="label">URL</label>
+              <div className="fieldLabel">Max width</div>
+              {numberInput(spec.container.maxWidth, (v) => setContainer({ maxWidth: clamp(v, 280, 860) }), 280, 860)}
+            </div>
+
+            <div className="field">
+              <div className="fieldLabel">Corner radius</div>
+              {numberInput(spec.container.cornerRadius, (v) => setContainer({ cornerRadius: clamp(v, 0, 40) }), 0, 40)}
+            </div>
+
+            <div className="field">
+              <div className="fieldLabel">Padding</div>
+              {numberInput(spec.container.padding, (v) => setContainer({ padding: clamp(v, 0, 48) }), 0, 48)}
+            </div>
+
+            <div className="fieldRow">
+              <label className="chkRow">
+                <input
+                  type="checkbox"
+                  checked={spec.container.showCloseIcon}
+                  onChange={(e) => setContainer({ showCloseIcon: e.target.checked })}
+                />
+                Show close icon
+              </label>
+
+              <label className="chkRow">
+                <input
+                  type="checkbox"
+                  checked={spec.container.backdrop}
+                  onChange={(e) => setContainer({ backdrop: e.target.checked })}
+                />
+                Backdrop
+              </label>
+
+              <label className="chkRow">
+                <input
+                  type="checkbox"
+                  checked={spec.container.dismissible}
+                  onChange={(e) => setContainer({ dismissible: e.target.checked })}
+                />
+                Dismissible
+              </label>
+            </div>
+
+            <div className="sectionTitle">Theme</div>
+
+            <div className="field">
+              <div className="fieldLabel">Brand color</div>
               <input
-                className="input"
-                value={selected.actionValue}
-                disabled={selected.actionType !== "url"}
-                onChange={(e) =>
-                  update((d) => {
-                    const el = d.elements.find((x) => x.id === selected.id) as any;
-                    if (el) el.actionValue = e.target.value;
-                  })
-                }
+                className="inp"
+                value={spec.theme.brandColor}
+                onChange={(e) => setTheme({ brandColor: e.target.value })}
+                placeholder="#3B82F6"
               />
             </div>
-          </div>
-        </>
-      )}
+
+            <div className="field">
+              <div className="fieldLabel">Background color</div>
+              <input
+                className="inp"
+                value={spec.container.backgroundColor}
+                onChange={(e) => setContainer({ backgroundColor: e.target.value })}
+                placeholder="#FFFFFF"
+              />
+            </div>
+          </>
+        ) : selected ? (
+          <>
+            <div className="sectionTitle">Element</div>
+
+            <div className="field">
+              <div className="fieldLabel">Name</div>
+              <input className="inp" value={selected.name} onChange={(e) => setElement({ name: e.target.value })} />
+            </div>
+
+            <div className="field">
+              <div className="fieldLabel">Alignment</div>
+              <div className="seg">
+                <button className={selected.align === "left" ? "segBtn active" : "segBtn"} onClick={() => setAlign("left")}>
+                  Left
+                </button>
+                <button className={selected.align === "center" ? "segBtn active" : "segBtn"} onClick={() => setAlign("center")}>
+                  Center
+                </button>
+                <button className={selected.align === "right" ? "segBtn active" : "segBtn"} onClick={() => setAlign("right")}>
+                  Right
+                </button>
+              </div>
+            </div>
+
+            {spacingEditor("Margin", selected.margin, (next) => setElement({ margin: next }))}
+            {spacingEditor("Padding", selected.padding, (next) => setElement({ padding: next }))}
+
+            {selected.type === "text" && (
+              <>
+                <div className="sectionTitle">Text</div>
+
+                <div className="field">
+                  <div className="fieldLabel">Text</div>
+                  <textarea className="txt" value={selected.text} onChange={(e) => setElement({ text: e.target.value })} />
+                </div>
+
+                <div className="field">
+                  <div className="fieldLabel">Font size</div>
+                  {numberInput(selected.fontSize, (v) => setElement({ fontSize: clamp(v, 10, 40) }), 10, 40)}
+                </div>
+
+                <div className="field">
+                  <div className="fieldLabel">Font weight</div>
+                  <select className="sel" value={selected.fontWeight} onChange={(e) => setElement({ fontWeight: Number(e.target.value) })}>
+                    <option value={400}>400</option>
+                    <option value={500}>500</option>
+                    <option value={600}>600</option>
+                    <option value={700}>700</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <div className="fieldLabel">Color (optional)</div>
+                  <input className="inp" value={selected.color || ""} onChange={(e) => setElement({ color: e.target.value || undefined })} placeholder="inherit" />
+                </div>
+              </>
+            )}
+
+            {selected.type === "image" && (
+              <>
+                <div className="sectionTitle">Image</div>
+
+                <div className="field">
+                  <div className="fieldLabel">Image URL</div>
+                  <input className="inp" value={selected.url} onChange={(e) => setElement({ url: e.target.value })} />
+                </div>
+
+                <div className="field">
+                  <div className="fieldLabel">Alt text</div>
+                  <input className="inp" value={selected.alt} onChange={(e) => setElement({ alt: e.target.value })} />
+                </div>
+
+                <div className="field">
+                  <div className="fieldLabel">Height</div>
+                  {numberInput(selected.height, (v) => setElement({ height: clamp(v, 80, 320) }), 80, 320)}
+                </div>
+
+                <div className="field">
+                  <div className="fieldLabel">Radius</div>
+                  {numberInput(selected.radius, (v) => setElement({ radius: clamp(v, 0, 28) }), 0, 28)}
+                </div>
+              </>
+            )}
+
+            {selected.type === "cta" && (
+              <>
+                <div className="sectionTitle">CTA</div>
+
+                <div className="field">
+                  <div className="fieldLabel">Label</div>
+                  <input className="inp" value={selected.label} onChange={(e) => setElement({ label: e.target.value })} />
+                </div>
+
+                <div className="field">
+                  <div className="fieldLabel">Variant</div>
+                  <select className="sel" value={selected.variant} onChange={(e) => setElement({ variant: e.target.value })}>
+                    <option value="primary">primary</option>
+                    <option value="secondary">secondary</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <div className="fieldLabel">Action</div>
+                  <select
+                    className="sel"
+                    value={selected.action.type}
+                    onChange={(e) => {
+                      const t = e.target.value as "url" | "dismiss";
+                      setElement({ action: t === "dismiss" ? { type: "dismiss" } : { type: "url", value: selected.action.value || "https://example.com" } });
+                    }}
+                  >
+                    <option value="url">Open URL</option>
+                    <option value="dismiss">Dismiss</option>
+                  </select>
+                </div>
+
+                {selected.action.type === "url" && (
+                  <div className="field">
+                    <div className="fieldLabel">URL</div>
+                    <input
+                      className="inp"
+                      value={selected.action.value || ""}
+                      onChange={(e) => setElement({ action: { type: "url", value: e.target.value } })}
+                    />
+                  </div>
+                )}
+
+                <label className="chkRow">
+                  <input type="checkbox" checked={selected.fullWidth} onChange={(e) => setElement({ fullWidth: e.target.checked })} />
+                  Full width
+                </label>
+              </>
+            )}
+          </>
+        ) : (
+          <div className="emptyState">Select an element to edit its properties.</div>
+        )}
+      </div>
     </div>
   );
 }
